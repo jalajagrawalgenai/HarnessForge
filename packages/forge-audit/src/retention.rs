@@ -18,7 +18,7 @@ impl RetentionManager {
             RetentionPolicy::KeepUntilStorageLimit(_limit) => true,
         }
     }
-    pub fn filter(&self, events: &[AuditEvent]) -> Vec<&AuditEvent> {
+    pub fn filter<'a>(&self, events: &'a [AuditEvent]) -> Vec<&'a AuditEvent> {
         match &self.policy {
             RetentionPolicy::KeepAll => events.iter().collect(),
             RetentionPolicy::KeepDays(days) => {

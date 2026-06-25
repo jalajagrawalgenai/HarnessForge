@@ -5,6 +5,7 @@ pub mod error;
 pub mod events;
 pub mod harness;
 pub mod prelude;
+pub mod presets;
 pub mod traits;
 pub mod types;
 
