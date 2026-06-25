@@ -3,7 +3,7 @@ requires = ["maturin>=1.0"]
 build-backend = "maturin"
 
 [project]
-name = "forge-sdk"
+name = "forge-agent-sdk"
 version = "0.1.0"
 description = "Forge — AI Agent Harness SDK for Python. Wrap any AI agent with 12-dimension observation, 16 detectors, 14 autonomous intervention strategies."
 readme = "README.md"

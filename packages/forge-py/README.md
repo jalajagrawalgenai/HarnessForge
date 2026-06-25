@@ -5,7 +5,7 @@ Wrap any AI agent with 12-dimension observation, 16 detectors, and 14 autonomous
 ## Installation
 
 ```bash
-pip install forge-sdk
+pip install forge-agent-sdk
 ```
 
 Or from source:

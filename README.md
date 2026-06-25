@@ -83,7 +83,7 @@ cargo run -p forge-cli -- init --name my-agent --agent-type solo
 
 ```bash
 # Install (once published to PyPI)
-pip install forge-sdk
+pip install forge-agent-sdk
 
 # Or from source
 cd packages/forge-py
@@ -407,7 +407,7 @@ docker run --rm -v $(pwd):/io ghcr.io/pyo3/maturin build --release
 
 Users install with:
 ```bash
-pip install forge-sdk
+pip install forge-agent-sdk
 ```
 
 And use immediately:
@@ -583,7 +583,7 @@ runner::run_harness_session(&mut agent, task, Preset::LangGraph, None).await?;
 | `forge-bridge` | 4 files | HTTP client, token counter, model catalog (5 models), cost calculator |
 | `forge-mcp` | 4 files | MCP client, server, gateway, discovery |
 | `forge-skills` | 3 files | Skill registry, composer, built-in skills |
-| `forge-py` | 3 files | Python bindings (PyO3) — `pip install forge-sdk` |
+| `forge-py` | 3 files | Python bindings (PyO3) — `pip install forge-agent-sdk` |
 | `forge-cloud` | 5 files | AWS, Azure, GCP cloud integration traits + deploy |
 | **Total** | **180+ source files** | **130 tests, 0 failures** |
 
@@ -724,7 +724,7 @@ cargo test -p forge-audit
 - [x] Skills registry + composer
 - [x] Cloud traits (AWS, Azure, GCP)
 - [x] Working example (`examples/basic-agent/`)
-- [x] Python bindings (`pip install forge-sdk`)
+- [x] Python bindings (`pip install forge-agent-sdk`)
 - [x] 130 tests, 0 failures
 
 ### 🚧 In Progress (Phase 2)
