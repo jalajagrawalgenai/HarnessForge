@@ -14,6 +14,7 @@ members = [
     "packages/forge-bridge",
     "packages/forge-meta",
     "packages/forge-server",
+    "packages/forge-integrations",
 ]
 
 [workspace.package]

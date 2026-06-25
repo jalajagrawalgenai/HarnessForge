@@ -13,3 +13,4 @@ pub mod alerts;
 pub mod custody;
 pub mod store_postgres;
 pub mod siem;
+pub mod carbon;

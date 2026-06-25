@@ -1,0 +1,25 @@
+name: 'Forge Check'
+description: 'Run agent harness checks'
+inputs:
+  agent:
+    description: 'Path to agent binary'
+    required: true
+  tasks:
+    description: 'Path to benchmark tasks'
+    default: './benchmarks/tasks.yaml'
+  min_health:
+    description: 'Minimum health score'
+    default: '0.7'
+runs:
+  using: 'composite'
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - run: cargo install --path . && forge test --agent ${{ inputs.agent }} --tasks ${{ inputs.tasks }}
+      shell: bash
+    - run: |
+        HEALTH=$(forge explain --json | jq '.health_score')
+        if (( $(echo "$HEALTH < ${{ inputs.min_health }}" | bc -l) )); then
+          echo "Health score $HEALTH below minimum ${{ inputs.min_health }}"
+          exit 1
+        fi
+      shell: bash
