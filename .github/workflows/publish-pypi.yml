@@ -7,23 +7,28 @@ on:
 
 jobs:
   build-wheels:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
       - uses: PyO3/maturin-action@v1
-        env:
-          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
         with:
           command: build
-          args: --release --out dist
+          args: --release --out dist -i python${{ matrix.python }}
           working-directory: packages/forge-py
+
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.os }}-py${{ matrix.python }}
           path: packages/forge-py/dist
 
   publish:
@@ -39,6 +44,7 @@ jobs:
           pattern: wheels-*
           merge-multiple: true
           path: dist
+
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
