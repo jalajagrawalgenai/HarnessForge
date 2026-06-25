@@ -1,18 +1,30 @@
-use forge_sdk::types::token::{TokenCount, TokenBudget};
-use forge_sdk::types::health::{HealthScore, HealthDimensions, HealthTrend};
+use forge_sdk::events::{
+    AgentEvent, CompressionLayer, DegradeLevel, Intervention, IsolationLevel, ToolResult,
+};
 use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
-use forge_sdk::events::{AgentEvent, Intervention, ToolResult, CompressionLayer, IsolationLevel, DegradeLevel};
+use forge_sdk::types::health::{HealthDimensions, HealthScore, HealthTrend};
+use forge_sdk::types::token::{TokenBudget, TokenCount};
 use serde_json;
 
 #[test]
 fn test_token_count_total() {
-    let tc = TokenCount { input: 100, output: 50, cache_write: 20, cache_read: 30 };
+    let tc = TokenCount {
+        input: 100,
+        output: 50,
+        cache_write: 20,
+        cache_read: 30,
+    };
     assert_eq!(tc.total(), 200);
 }
 
 #[test]
 fn test_token_count_cache_hit_rate() {
-    let tc = TokenCount { input: 0, output: 0, cache_write: 20, cache_read: 80 };
+    let tc = TokenCount {
+        input: 0,
+        output: 0,
+        cache_write: 20,
+        cache_read: 80,
+    };
     assert!((tc.cache_hit_rate() - 0.8).abs() < 0.01);
 }
 
@@ -32,10 +44,30 @@ fn test_token_budget_defaults() {
 
 #[test]
 fn test_health_score_colors() {
-    let green = HealthScore { agent_id: "a".into(), overall: 0.9, dimensions: HealthDimensions::default(), trend: HealthTrend::Stable };
-    let yellow = HealthScore { agent_id: "b".into(), overall: 0.6, dimensions: HealthDimensions::default(), trend: HealthTrend::Stable };
-    let orange = HealthScore { agent_id: "c".into(), overall: 0.4, dimensions: HealthDimensions::default(), trend: HealthTrend::Stable };
-    let red = HealthScore { agent_id: "d".into(), overall: 0.2, dimensions: HealthDimensions::default(), trend: HealthTrend::Stable };
+    let green = HealthScore {
+        agent_id: "a".into(),
+        overall: 0.9,
+        dimensions: HealthDimensions::default(),
+        trend: HealthTrend::Stable,
+    };
+    let yellow = HealthScore {
+        agent_id: "b".into(),
+        overall: 0.6,
+        dimensions: HealthDimensions::default(),
+        trend: HealthTrend::Stable,
+    };
+    let orange = HealthScore {
+        agent_id: "c".into(),
+        overall: 0.4,
+        dimensions: HealthDimensions::default(),
+        trend: HealthTrend::Stable,
+    };
+    let red = HealthScore {
+        agent_id: "d".into(),
+        overall: 0.2,
+        dimensions: HealthDimensions::default(),
+        trend: HealthTrend::Stable,
+    };
     assert_eq!(green.emoji(), "🟢");
     assert_eq!(yellow.emoji(), "🟡");
     assert_eq!(orange.emoji(), "🟠");
@@ -54,9 +86,14 @@ fn test_health_dimensions_default() {
 #[test]
 fn test_detected_issue_severity() {
     let issue = DetectedIssue {
-        id: uuid::Uuid::new_v4(), agent_id: "test".into(), severity: Severity::Critical,
-        category: IssueCategory::SecretLeak { secret_type: "api_key".into() },
-        description: "test".into(), confidence: 1.0,
+        id: uuid::Uuid::new_v4(),
+        agent_id: "test".into(),
+        severity: Severity::Critical,
+        category: IssueCategory::SecretLeak {
+            secret_type: "api_key".into(),
+        },
+        description: "test".into(),
+        confidence: 1.0,
         suggested_actions: vec!["circuit_break".into()],
         evidence_summary: "test".into(),
     };
@@ -66,7 +103,8 @@ fn test_detected_issue_severity() {
 #[test]
 fn test_agent_event_serialization() {
     let event = AgentEvent::Started {
-        agent_id: "agent-1".into(), task: "build auth".into(),
+        agent_id: "agent-1".into(),
+        task: "build auth".into(),
         timestamp: chrono::Utc::now(),
     };
     let json = serde_json::to_string(&event).unwrap();
@@ -100,25 +138,64 @@ fn test_intervention_serialization() {
 #[test]
 fn test_all_intervention_variants_serialize() {
     let interventions = vec![
-        Intervention::Nudge { message: "m".into(), reason: "r".into() },
-        Intervention::Compact { target_ratio: 0.6, layer: CompressionLayer::Snip },
-        Intervention::Pause { reason: "r".into(), checkpoint_id: uuid::Uuid::new_v4() },
+        Intervention::Nudge {
+            message: "m".into(),
+            reason: "r".into(),
+        },
+        Intervention::Compact {
+            target_ratio: 0.6,
+            layer: CompressionLayer::Snip,
+        },
+        Intervention::Pause {
+            reason: "r".into(),
+            checkpoint_id: uuid::Uuid::new_v4(),
+        },
         Intervention::Resume,
-        Intervention::Escalate { new_model: Some("opus".into()), budget_increase: Some(50000), reason: "r".into() },
-        Intervention::Fork { count: 2, subtasks: vec!["a".into()] },
-        Intervention::Reroute { to_node: "verify".into(), reason: "r".into() },
-        Intervention::Rollback { checkpoint_id: uuid::Uuid::new_v4(), reason: "r".into() },
-        Intervention::Diversify { alternative_approach: "try risk-first".into() },
-        Intervention::Isolate { level: IsolationLevel::FullSandbox, reason: "r".into() },
+        Intervention::Escalate {
+            new_model: Some("opus".into()),
+            budget_increase: Some(50000),
+            reason: "r".into(),
+        },
+        Intervention::Fork {
+            count: 2,
+            subtasks: vec!["a".into()],
+        },
+        Intervention::Reroute {
+            to_node: "verify".into(),
+            reason: "r".into(),
+        },
+        Intervention::Rollback {
+            checkpoint_id: uuid::Uuid::new_v4(),
+            reason: "r".into(),
+        },
+        Intervention::Diversify {
+            alternative_approach: "try risk-first".into(),
+        },
+        Intervention::Isolate {
+            level: IsolationLevel::FullSandbox,
+            reason: "r".into(),
+        },
         Intervention::CircuitBreak { reason: "r".into() },
-        Intervention::Replace { context_summary: "s".into(), new_model: None },
-        Intervention::Interject { message: "STOP".into(), reason: "r".into() },
-        Intervention::Degrade { level: DegradeLevel::Mild },
+        Intervention::Replace {
+            context_summary: "s".into(),
+            new_model: None,
+        },
+        Intervention::Interject {
+            message: "STOP".into(),
+            reason: "r".into(),
+        },
+        Intervention::Degrade {
+            level: DegradeLevel::Mild,
+        },
         Intervention::Quarantine { reason: "r".into() },
     ];
     for (i, intervention) in interventions.iter().enumerate() {
         let json = serde_json::to_string(intervention).unwrap();
-        assert!(serde_json::from_str::<Intervention>(&json).is_ok(), "failed at index {}", i);
+        assert!(
+            serde_json::from_str::<Intervention>(&json).is_ok(),
+            "failed at index {}",
+            i
+        );
     }
 }
 
@@ -143,7 +220,11 @@ fn test_severity_ordering() {
 
 #[test]
 fn test_agent_outcome_default() {
-    let outcome = forge_sdk::events::AgentOutcome { success: true, summary: "done".into(), output: None };
+    let outcome = forge_sdk::events::AgentOutcome {
+        success: true,
+        summary: "done".into(),
+        output: None,
+    };
     assert!(outcome.success);
     assert_eq!(outcome.summary, "done");
 }

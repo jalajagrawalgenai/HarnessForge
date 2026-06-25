@@ -1,9 +1,9 @@
 // SecretLeakDetector — detects API keys, tokens, credentials in agent output
 
 use async_trait::async_trait;
-use uuid::Uuid;
 use forge_sdk::traits::detector::Detector;
 use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
+use uuid::Uuid;
 
 const CRITICAL_PATTERNS: &[(&str, &str)] = &[
     ("sk-ant-", "Anthropic API key"),
@@ -21,7 +21,9 @@ pub struct SecretLeakDetector;
 
 #[async_trait]
 impl Detector for SecretLeakDetector {
-    fn name(&self) -> &'static str { "secret_leak" }
+    fn name(&self) -> &'static str {
+        "secret_leak"
+    }
     fn description(&self) -> &'static str {
         "Detects API keys, tokens, passwords, and credentials in agent output"
     }

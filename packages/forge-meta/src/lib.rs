@@ -10,12 +10,12 @@ pub mod proposal_validator;
 pub mod scheduler;
 pub mod weakness_miner;
 
-use forge_sdk::error::ForgeError;
-use crate::weakness_miner::WeaknessMiner;
+use crate::ab_testing::ABTestEngine;
+use crate::edit_registry::EditRegistry;
 use crate::harness_proposer::HarnessProposer;
 use crate::proposal_validator::ProposalValidator;
-use crate::edit_registry::EditRegistry;
-use crate::ab_testing::ABTestEngine;
+use crate::weakness_miner::WeaknessMiner;
+use forge_sdk::error::ForgeError;
 
 /// The self-improving meta-harness. Runs the Self-Harness loop:
 /// Mine weaknesses → Propose edits → Validate → Apply
@@ -88,8 +88,11 @@ impl MetaHarness {
         let patterns = self.miner.mine(session_audits)?;
         if patterns.is_empty() {
             return Ok(ImprovementResult {
-                patterns_found: 0, edits_proposed: 0, edits_accepted: 0,
-                edits_rejected: 0, avg_improvement_pct: 0.0,
+                patterns_found: 0,
+                edits_proposed: 0,
+                edits_accepted: 0,
+                edits_rejected: 0,
+                avg_improvement_pct: 0.0,
                 new_harness_version: self.registry.current_version(),
             });
         }
@@ -122,12 +125,18 @@ impl MetaHarness {
             edits_proposed: edits.len(),
             edits_accepted: accepted,
             edits_rejected: rejected,
-            avg_improvement_pct: if accepted > 0 { total_improvement / accepted as f64 } else { 0.0 },
+            avg_improvement_pct: if accepted > 0 {
+                total_improvement / accepted as f64
+            } else {
+                0.0
+            },
             new_harness_version: new_version,
         })
     }
 
-    pub fn registry(&self) -> &EditRegistry { &self.registry }
+    pub fn registry(&self) -> &EditRegistry {
+        &self.registry
+    }
 }
 
 /// Represents a completed session's audit data for mining

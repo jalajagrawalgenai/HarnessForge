@@ -1,11 +1,11 @@
 // StaleContextDetector — detects duplicate file reads and context pressure
 
-use std::collections::HashMap;
-use std::sync::Mutex;
 use async_trait::async_trait;
-use uuid::Uuid;
 use forge_sdk::traits::detector::Detector;
 use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use uuid::Uuid;
 
 pub struct StaleContextDetector {
     /// file_path → read_count
@@ -26,7 +26,9 @@ impl StaleContextDetector {
 
 #[async_trait]
 impl Detector for StaleContextDetector {
-    fn name(&self) -> &'static str { "stale_context" }
+    fn name(&self) -> &'static str {
+        "stale_context"
+    }
     fn description(&self) -> &'static str {
         "Detects duplicate file reads and high context pressure"
     }
@@ -77,13 +79,20 @@ impl Detector for StaleContextDetector {
                     issues.push(DetectedIssue {
                         id: Uuid::new_v4(),
                         agent_id: agent_id.to_string(),
-                        severity: if pressure > 0.95 { Severity::Error } else { Severity::Warning },
+                        severity: if pressure > 0.95 {
+                            Severity::Error
+                        } else {
+                            Severity::Warning
+                        },
                         category: IssueCategory::StaleContext {
                             file_path: "n/a".into(),
                             read_count: 0,
                             context_pressure: pressure,
                         },
-                        description: format!("Context pressure at {:.0}% — compaction needed", pressure * 100.0),
+                        description: format!(
+                            "Context pressure at {:.0}% — compaction needed",
+                            pressure * 100.0
+                        ),
                         confidence: pressure.min(1.0),
                         suggested_actions: vec!["compact".into()],
                         evidence_summary: format!("Context pressure: {:.0}%", pressure * 100.0),

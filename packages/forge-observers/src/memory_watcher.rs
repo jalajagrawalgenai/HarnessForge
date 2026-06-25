@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use std::sync::Mutex;
 use forge_sdk::events::AgentEvent;
 use forge_sdk::traits::observer::Observer;
+use std::sync::Mutex;
 
 pub struct MemoryWatcher {
     retrievals: Mutex<u64>,
@@ -39,12 +39,16 @@ impl Observer for MemoryWatcher {
             // Track successful tool completions as memory "hits"
             AgentEvent::ToolCallEnd { result, .. } => {
                 if !result.is_error {
-                    if let Ok(mut h) = self.hits.lock() { *h += 1; }
+                    if let Ok(mut h) = self.hits.lock() {
+                        *h += 1;
+                    }
                 }
             }
             // Track tool calls as memory store operations
             AgentEvent::OutputComplete { .. } => {
-                if let Ok(mut s) = self.store_count.lock() { *s += 1; }
+                if let Ok(mut s) = self.store_count.lock() {
+                    *s += 1;
+                }
             }
             _ => {}
         }
@@ -52,7 +56,11 @@ impl Observer for MemoryWatcher {
         let ret = self.retrievals.lock().map(|r| *r).unwrap_or(0);
         let hit = self.hits.lock().map(|h| *h).unwrap_or(0);
         let stored = self.store_count.lock().map(|s| *s).unwrap_or(0);
-        let hit_rate = if ret == 0 { 0.0 } else { hit as f64 / ret as f64 };
+        let hit_rate = if ret == 0 {
+            0.0
+        } else {
+            hit as f64 / ret as f64
+        };
         let growth_rate_kb = stored.saturating_mul(4) as f64; // ~4KB per store
 
         Some(serde_json::json!({

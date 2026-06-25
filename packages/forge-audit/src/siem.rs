@@ -1,7 +1,12 @@
 use forge_sdk::types::audit::AuditEvent;
 use serde_json::json;
 
-pub enum SiemFormat { Splunk, Elastic, Datadog, Sumo }
+pub enum SiemFormat {
+    Splunk,
+    Elastic,
+    Datadog,
+    Sumo,
+}
 
 pub fn export_for_siem(events: &[AuditEvent], format: SiemFormat) -> Vec<String> {
     events.iter().map(|e| {

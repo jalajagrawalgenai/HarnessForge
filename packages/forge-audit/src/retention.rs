@@ -2,12 +2,20 @@ use chrono::{Duration, Utc};
 use forge_sdk::types::audit::AuditEvent;
 
 #[derive(Debug, Clone)]
-pub enum RetentionPolicy { KeepAll, KeepDays(u32), KeepUntilStorageLimit(u64) }
+pub enum RetentionPolicy {
+    KeepAll,
+    KeepDays(u32),
+    KeepUntilStorageLimit(u64),
+}
 
-pub struct RetentionManager { policy: RetentionPolicy }
+pub struct RetentionManager {
+    policy: RetentionPolicy,
+}
 
 impl RetentionManager {
-    pub fn new(policy: RetentionPolicy) -> Self { Self { policy } }
+    pub fn new(policy: RetentionPolicy) -> Self {
+        Self { policy }
+    }
     pub fn should_retain(&self, event: &AuditEvent, _max_age_days: u32) -> bool {
         match &self.policy {
             RetentionPolicy::KeepAll => true,

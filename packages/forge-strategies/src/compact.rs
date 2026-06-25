@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use forge_sdk::events::{CompressionLayer, Intervention};
 use forge_sdk::traits::strategy::Strategy;
 use forge_sdk::types::detection::DetectedIssue;
-use forge_sdk::types::strategy::StrategyResult;
 use forge_sdk::types::detection::IssueCategory;
+use forge_sdk::types::strategy::StrategyResult;
 
 pub struct CompactStrategy {
     target_ratio: f64,
@@ -31,12 +31,18 @@ impl CompactStrategy {
 
 #[async_trait]
 impl Strategy for CompactStrategy {
-    fn name(&self) -> &'static str { "compact" }
-    fn priority(&self) -> u32 { 20 }
+    fn name(&self) -> &'static str {
+        "compact"
+    }
+    fn priority(&self) -> u32 {
+        20
+    }
 
     async fn evaluate(&self, detection: &DetectedIssue) -> Option<StrategyResult> {
         let pressure = match &detection.category {
-            IssueCategory::StaleContext { context_pressure, .. } => *context_pressure,
+            IssueCategory::StaleContext {
+                context_pressure, ..
+            } => *context_pressure,
             _ => return None, // Only handle stale context
         };
 
@@ -52,7 +58,9 @@ impl Strategy for CompactStrategy {
             priority: self.priority(),
             reasoning: format!(
                 "Context pressure at {:.0}%, applying {:?} compaction to reach {:.0}%",
-                pressure * 100.0, layer, self.target_ratio * 100.0
+                pressure * 100.0,
+                layer,
+                self.target_ratio * 100.0
             ),
             confidence: detection.confidence,
         })

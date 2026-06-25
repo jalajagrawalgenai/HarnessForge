@@ -1,18 +1,22 @@
-use forge_harness::event_bus::{EventBus, EventObserver};
-use forge_harness::plugin_registry::PluginRegistry;
-use forge_harness::checkpoint::CheckpointManager;
-use forge_harness::human_gate::{HumanGate, HumanGateConfig, GateState};
-use forge_harness::config::ForgeConfig;
-use forge_sdk::events::AgentEvent;
 use chrono::Utc;
+use forge_harness::checkpoint::CheckpointManager;
+use forge_harness::config::ForgeConfig;
+use forge_harness::event_bus::{EventBus, EventObserver};
+use forge_harness::human_gate::{GateState, HumanGate, HumanGateConfig};
+use forge_harness::plugin_registry::PluginRegistry;
+use forge_sdk::events::AgentEvent;
 use serde_json::json;
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 struct TestObserver;
 impl EventObserver for TestObserver {
-    fn name(&self) -> &'static str { "test" }
-    fn dimension(&self) -> &'static str { "test" }
+    fn name(&self) -> &'static str {
+        "test"
+    }
+    fn dimension(&self) -> &'static str {
+        "test"
+    }
     fn on_event(&self, _e: &AgentEvent) {}
 }
 
@@ -20,7 +24,10 @@ impl EventObserver for TestObserver {
 fn test_event_bus_dispatch() {
     let mut bus = EventBus::new(100);
     bus.register(Arc::new(TestObserver));
-    let ev = AgentEvent::ThinkingStart { agent_id: "a".into(), timestamp: Utc::now() };
+    let ev = AgentEvent::ThinkingStart {
+        agent_id: "a".into(),
+        timestamp: Utc::now(),
+    };
     bus.dispatch(&ev);
     assert_eq!(bus.all_recent().len(), 1);
 }
@@ -29,7 +36,10 @@ fn test_event_bus_dispatch() {
 fn test_event_bus_window() {
     let mut bus = EventBus::new(3);
     for i in 0..5 {
-        bus.dispatch(&AgentEvent::ThinkingStart { agent_id: i.to_string(), timestamp: Utc::now() });
+        bus.dispatch(&AgentEvent::ThinkingStart {
+            agent_id: i.to_string(),
+            timestamp: Utc::now(),
+        });
     }
     assert_eq!(bus.all_recent().len(), 3);
 }
@@ -43,7 +53,14 @@ fn test_plugin_registry_empty() {
 #[test]
 fn test_checkpoint_save_retrieve() {
     let mut cm = CheckpointManager::new(5);
-    let cp = cm.save(Uuid::new_v4(), 1, json!({"s":"ok"}), json!({"t":100}), None, None);
+    let cp = cm.save(
+        Uuid::new_v4(),
+        1,
+        json!({"s":"ok"}),
+        json!({"t":100}),
+        None,
+        None,
+    );
     assert!(cm.latest().is_some());
     assert_eq!(cp.id, cm.latest().unwrap().id);
 }

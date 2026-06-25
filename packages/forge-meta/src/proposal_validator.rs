@@ -1,5 +1,5 @@
-use forge_sdk::error::ForgeError;
 use crate::harness_proposer::HarnessEdit;
+use forge_sdk::error::ForgeError;
 use rand::Rng;
 
 pub struct ProposalValidator {
@@ -29,8 +29,18 @@ pub struct ValidationEvidence {
 }
 
 impl ProposalValidator {
-    pub fn new(test_count: usize, min_improvement_pct: f64, max_regressions: usize, significance_level: f64) -> Self {
-        Self { test_count, min_improvement_pct, max_regressions, significance_level }
+    pub fn new(
+        test_count: usize,
+        min_improvement_pct: f64,
+        max_regressions: usize,
+        significance_level: f64,
+    ) -> Self {
+        Self {
+            test_count,
+            min_improvement_pct,
+            max_regressions,
+            significance_level,
+        }
     }
 
     /// Validate each edit by simulating regression testing on held-out tasks.
@@ -51,10 +61,18 @@ impl ProposalValidator {
             let new_pass_rate = (baseline_pass_rate + improvement).clamp(0.0, 1.0);
 
             let tasks_improved = (improvement.max(0.0) * self.test_count as f64) as usize;
-            let tasks_regressed = if improvement < 0.0 { ((-improvement) * self.test_count as f64) as usize } else { 0 };
+            let tasks_regressed = if improvement < 0.0 {
+                ((-improvement) * self.test_count as f64) as usize
+            } else {
+                0
+            };
 
             // Statistical significance (simplified McNemar-like check)
-            let p_value = if tasks_improved > 0 { 0.001 + rng.gen::<f64>() * 0.04 } else { 0.5 };
+            let p_value = if tasks_improved > 0 {
+                0.001 + rng.gen::<f64>() * 0.04
+            } else {
+                0.5
+            };
 
             let improvement_pct = improvement * 100.0;
             let accepted = improvement_pct >= self.min_improvement_pct

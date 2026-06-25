@@ -114,7 +114,12 @@ async fn main() {
             let n = name.unwrap_or_else(|| "my-forge-agent".into());
             cmd_init(&n, &agent_type);
         }
-        Commands::Run { task, agent, preset, dry_run } => {
+        Commands::Run {
+            task,
+            agent,
+            preset,
+            dry_run,
+        } => {
             cmd_run(&task, &agent, &preset, dry_run).await;
         }
         Commands::Watch { session_id } => {
@@ -142,7 +147,9 @@ async fn main() {
         }
         Commands::Serve { port } => {
             println!("🌐 Starting Forge server on http://localhost:{port}");
-            println!("(Server requires forge-server crate — use 'cargo run -p forge-server' directly)");
+            println!(
+                "(Server requires forge-server crate — use 'cargo run -p forge-server' directly)"
+            );
         }
         Commands::Doctor => {
             cmd_doctor();
@@ -172,7 +179,9 @@ async fn main() {
         Commands::Plugin { action } => match action {
             Some(PluginAction::Search { query }) => println!("🔍 Searching plugins: {query}"),
             Some(PluginAction::Install { name }) => println!("📦 Installing plugin: {name}"),
-            Some(PluginAction::List) | None => println!("📦 Installed plugins: (plugin registry coming soon)"),
+            Some(PluginAction::List) | None => {
+                println!("📦 Installed plugins: (plugin registry coming soon)")
+            }
         },
         Commands::Export { session_id, format } => {
             println!("📤 Exporting session {session_id} as {format}");
@@ -307,8 +316,8 @@ fn agent_type_to_enum(at: &str) -> &str {
 }
 
 async fn cmd_run(task: &str, agent_type: &str, preset: &str, dry_run: bool) {
-    use forge_sdk::agent::{AgentType, MockAgent};
     use forge_harness::runner;
+    use forge_sdk::agent::{AgentType, MockAgent};
 
     let at = match agent_type.to_lowercase().as_str() {
         "solo" => AgentType::Solo,
@@ -361,7 +370,14 @@ async fn cmd_run(task: &str, agent_type: &str, preset: &str, dry_run: bool) {
     println!("   Agent:  {agent_name} ({agent_type})");
     println!("   Preset: {preset}");
     println!("   Task:   {task}");
-    println!("   Mode:   {}", if dry_run { "DRY RUN (observe only)" } else { "LIVE" });
+    println!(
+        "   Mode:   {}",
+        if dry_run {
+            "DRY RUN (observe only)"
+        } else {
+            "LIVE"
+        }
+    );
     println!();
 
     let result = if dry_run {
@@ -374,7 +390,10 @@ async fn cmd_run(task: &str, agent_type: &str, preset: &str, dry_run: bool) {
         Ok(r) => {
             println!("✅ Session complete!");
             println!("   Agent ID:      {}", r.agent_id);
-            println!("   Success:       {}", if r.success { "✅ YES" } else { "❌ NO" });
+            println!(
+                "   Success:       {}",
+                if r.success { "✅ YES" } else { "❌ NO" }
+            );
             println!("   Observ. cycles: {}", r.observation_count);
             println!("   Detections:    {}", r.detection_count);
             println!("   Interventions: {}", r.intervention_count);
@@ -412,10 +431,14 @@ async fn cmd_bench(suite: &str) {
     println!("   (Full benchmark suite requires benchmark tasks YAML — coming in next release)");
 
     // Quick smoke test
-    let mut agent = forge_sdk::agent::MockAgent::new("bench-agent", forge_sdk::agent::AgentType::Solo);
+    let mut agent =
+        forge_sdk::agent::MockAgent::new("bench-agent", forge_sdk::agent::AgentType::Solo);
     match forge_harness::runner::quick_run(&mut agent, "benchmark smoke test").await {
-        Ok(r) => println!("   Smoke test: ✅ ({detections} detections, {interventions} interventions)",
-            detections = r.detection_count, interventions = r.intervention_count),
+        Ok(r) => println!(
+            "   Smoke test: ✅ ({detections} detections, {interventions} interventions)",
+            detections = r.detection_count,
+            interventions = r.intervention_count
+        ),
         Err(e) => println!("   Smoke test: ❌ ({e})"),
     }
 }
@@ -427,13 +450,17 @@ async fn cmd_improve(agent_type: &str) {
     // In a full implementation, this calls forge_meta::run_improvement_cycle()
     let audits: Vec<forge_sdk::types::audit::AuditReport> = vec![];
     if audits.len() < 20 {
-        println!("   ⚠ Only {} audit records found. Need 20+ for meaningful patterns.", audits.len());
+        println!(
+            "   ⚠ Only {} audit records found. Need 20+ for meaningful patterns.",
+            audits.len()
+        );
     }
 }
 
 async fn cmd_test(tasks: &str) {
     println!("🧪 Running agent test suite: {tasks}");
-    let mut agent = forge_sdk::agent::MockAgent::new("test-agent", forge_sdk::agent::AgentType::Solo);
+    let mut agent =
+        forge_sdk::agent::MockAgent::new("test-agent", forge_sdk::agent::AgentType::Solo);
     match forge_harness::runner::quick_run(&mut agent, &format!("test suite: {tasks}")).await {
         Ok(r) => {
             if r.success {
@@ -451,30 +478,50 @@ fn cmd_doctor() {
     println!();
 
     // Rust toolchain
-    let rustc = std::process::Command::new("rustc").arg("--version").output();
+    let rustc = std::process::Command::new("rustc")
+        .arg("--version")
+        .output();
     match rustc {
-        Ok(out) => println!("   ✅ Rust:     {}", String::from_utf8_lossy(&out.stdout).trim()),
+        Ok(out) => println!(
+            "   ✅ Rust:     {}",
+            String::from_utf8_lossy(&out.stdout).trim()
+        ),
         Err(_) => println!("   ❌ Rust:     not found — install from https://rustup.rs"),
     }
 
     // Cargo
-    let cargo = std::process::Command::new("cargo").arg("--version").output();
+    let cargo = std::process::Command::new("cargo")
+        .arg("--version")
+        .output();
     match cargo {
-        Ok(out) => println!("   ✅ Cargo:    {}", String::from_utf8_lossy(&out.stdout).trim()),
+        Ok(out) => println!(
+            "   ✅ Cargo:    {}",
+            String::from_utf8_lossy(&out.stdout).trim()
+        ),
         Err(_) => println!("   ❌ Cargo:    not found"),
     }
 
     // SQLite
-    let sqlite = std::process::Command::new("sqlite3").arg("--version").output();
+    let sqlite = std::process::Command::new("sqlite3")
+        .arg("--version")
+        .output();
     match sqlite {
-        Ok(out) => println!("   ✅ SQLite:   {}", String::from_utf8_lossy(&out.stdout).trim()),
+        Ok(out) => println!(
+            "   ✅ SQLite:   {}",
+            String::from_utf8_lossy(&out.stdout).trim()
+        ),
         Err(_) => println!("   ⚠ SQLite:   CLI not found (library still works via sqlx)"),
     }
 
     // Docker (optional)
-    let docker = std::process::Command::new("docker").arg("--version").output();
+    let docker = std::process::Command::new("docker")
+        .arg("--version")
+        .output();
     match docker {
-        Ok(out) => println!("   ✅ Docker:   {}", String::from_utf8_lossy(&out.stdout).trim()),
+        Ok(out) => println!(
+            "   ✅ Docker:   {}",
+            String::from_utf8_lossy(&out.stdout).trim()
+        ),
         Err(_) => println!("   ⚠ Docker:   not found (optional, for sandbox mode)"),
     }
 
@@ -489,8 +536,12 @@ fn cmd_doctor() {
     let has_anthropic = std::env::var("ANTHROPIC_API_KEY").is_ok();
     let has_openai = std::env::var("OPENAI_API_KEY").is_ok();
     if has_anthropic || has_openai {
-        if has_anthropic { println!("   ✅ ANTHROPIC_API_KEY: set"); }
-        if has_openai { println!("   ✅ OPENAI_API_KEY: set"); }
+        if has_anthropic {
+            println!("   ✅ ANTHROPIC_API_KEY: set");
+        }
+        if has_openai {
+            println!("   ✅ OPENAI_API_KEY: set");
+        }
     } else {
         println!("   ⚠ No LLM API keys found (set ANTHROPIC_API_KEY or OPENAI_API_KEY)");
     }

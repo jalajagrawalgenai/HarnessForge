@@ -39,7 +39,9 @@ impl ImprovementScheduler {
         self
     }
 
-    pub fn runs_today(&self) -> usize { self.runs_today }
+    pub fn runs_today(&self) -> usize {
+        self.runs_today
+    }
 
     pub fn notify_session_completed(&mut self) {
         self.session_count_since_last += 1;
@@ -95,5 +97,7 @@ impl ImprovementScheduler {
 }
 
 impl Default for ImprovementScheduler {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

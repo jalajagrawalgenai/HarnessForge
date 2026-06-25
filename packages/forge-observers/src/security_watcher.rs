@@ -1,9 +1,9 @@
 // SecurityWatcher — detects secret leaks, dangerous tools, prompt injection
 
 use async_trait::async_trait;
-use std::sync::Mutex;
 use forge_sdk::events::AgentEvent;
 use forge_sdk::traits::observer::Observer;
+use std::sync::Mutex;
 
 pub struct SecurityWatcher {
     secret_leaks: Mutex<u64>,
@@ -13,19 +13,34 @@ pub struct SecurityWatcher {
 
 // Patterns for detection
 const SECRET_PATTERNS: &[&str] = &[
-    "sk-", "api_key", "BEGIN PRIVATE KEY", "AWS_ACCESS_KEY",
-    "ghp_", "xoxb-", "token=", "password=", "secret=",
+    "sk-",
+    "api_key",
+    "BEGIN PRIVATE KEY",
+    "AWS_ACCESS_KEY",
+    "ghp_",
+    "xoxb-",
+    "token=",
+    "password=",
+    "secret=",
 ];
 
 const DANGEROUS_COMMANDS: &[&str] = &[
-    "rm -rf /", "curl | bash", "sudo ", "chmod 777",
-    "DROP TABLE", "; DROP ", "eval(",
+    "rm -rf /",
+    "curl | bash",
+    "sudo ",
+    "chmod 777",
+    "DROP TABLE",
+    "; DROP ",
+    "eval(",
 ];
 
 const INJECTION_PATTERNS: &[&str] = &[
-    "ignore previous instructions", "you are now DAN",
-    "system override", "pretend you are",
-    "new instructions:", "forget everything",
+    "ignore previous instructions",
+    "you are now DAN",
+    "system override",
+    "pretend you are",
+    "new instructions:",
+    "forget everything",
 ];
 
 #[allow(clippy::new_without_default)]
@@ -47,15 +62,25 @@ impl SecurityWatcher {
             .collect()
     }
 
-    pub fn leak_count(&self) -> u64 { *self.secret_leaks.lock().unwrap() }
-    pub fn dangerous_count(&self) -> u64 { *self.dangerous_calls.lock().unwrap() }
-    pub fn injection_count(&self) -> u64 { *self.injection_attempts.lock().unwrap() }
+    pub fn leak_count(&self) -> u64 {
+        *self.secret_leaks.lock().unwrap()
+    }
+    pub fn dangerous_count(&self) -> u64 {
+        *self.dangerous_calls.lock().unwrap()
+    }
+    pub fn injection_count(&self) -> u64 {
+        *self.injection_attempts.lock().unwrap()
+    }
 }
 
 #[async_trait]
 impl Observer for SecurityWatcher {
-    fn name(&self) -> &'static str { "security" }
-    fn dimension(&self) -> &'static str { "security" }
+    fn name(&self) -> &'static str {
+        "security"
+    }
+    fn dimension(&self) -> &'static str {
+        "security"
+    }
 
     async fn observe(&self, event: &AgentEvent) -> Option<serde_json::Value> {
         match event {

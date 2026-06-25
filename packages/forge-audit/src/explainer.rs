@@ -10,8 +10,14 @@ pub fn explain(report: &AuditReport) -> String {
     out.push_str("FORGE AUDIT REPORT\n");
     out.push_str(&format!("Session: {}\n", report.session_id));
     out.push_str(&format!("Task: \"{}\"\n", report.task));
-    out.push_str(&format!("Agent: {} ({})\n", report.agent_type, report.model));
-    out.push_str(&format!("Duration: {:.1} minutes\n", report.duration_secs / 60.0));
+    out.push_str(&format!(
+        "Agent: {} ({})\n",
+        report.agent_type, report.model
+    ));
+    out.push_str(&format!(
+        "Duration: {:.1} minutes\n",
+        report.duration_secs / 60.0
+    ));
     if let Some(eff) = report.harness_effectiveness {
         out.push_str(&format!("Harness Effectiveness: {:.2}\n", eff));
     }
@@ -56,10 +62,7 @@ pub fn explain(report: &AuditReport) -> String {
         report.interventions.len()
     ));
     for int in &report.interventions {
-        out.push_str(&format!(
-            "  [Turn {}] {} applied\n",
-            int.turn, int.strategy
-        ));
+        out.push_str(&format!("  [Turn {}] {} applied\n", int.turn, int.strategy));
         out.push_str(&format!("    → Outcome: {}\n", int.outcome));
         if let Some(impact) = &int.impact {
             out.push_str(&format!("    → Impact: {}\n", impact));

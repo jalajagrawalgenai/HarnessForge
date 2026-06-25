@@ -1,8 +1,8 @@
 // forge-sdk/src/events.rs — Core event types flowing through the harness bus
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Every agent event flows through the harness bus.
 /// The harness observes all events. It can also INJECT interventions.
@@ -131,8 +131,13 @@ pub struct ToolResult {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum MessageContent {
     Text(String),
-    ToolCall { name: String, args: serde_json::Value },
-    Task { description: String },
+    ToolCall {
+        name: String,
+        args: serde_json::Value,
+    },
+    Task {
+        description: String,
+    },
     Structured(serde_json::Value),
 }
 
@@ -141,25 +146,16 @@ pub enum MessageContent {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Intervention {
     /// Inject a hint into agent context
-    Nudge {
-        message: String,
-        reason: String,
-    },
+    Nudge { message: String, reason: String },
     /// Insert message as if from user (stronger than nudge)
-    Interject {
-        message: String,
-        reason: String,
-    },
+    Interject { message: String, reason: String },
     /// Trigger context compaction
     Compact {
         target_ratio: f64,
         layer: CompressionLayer,
     },
     /// Pause agent, wait for human
-    Pause {
-        reason: String,
-        checkpoint_id: Uuid,
-    },
+    Pause { reason: String, checkpoint_id: Uuid },
     /// Resume after pause
     Resume,
     /// Upgrade model, expand budget, add tools
@@ -169,46 +165,29 @@ pub enum Intervention {
         reason: String,
     },
     /// Fork agent into N children
-    Fork {
-        count: u32,
-        subtasks: Vec<String>,
-    },
+    Fork { count: u32, subtasks: Vec<String> },
     /// Change agent's next action (graph mode)
-    Reroute {
-        to_node: String,
-        reason: String,
-    },
+    Reroute { to_node: String, reason: String },
     /// Restore from checkpoint
-    Rollback {
-        checkpoint_id: Uuid,
-        reason: String,
-    },
+    Rollback { checkpoint_id: Uuid, reason: String },
     /// Force agent to try different approach
-    Diversify {
-        alternative_approach: String,
-    },
+    Diversify { alternative_approach: String },
     /// Remove dangerous tools, restrict context
     Isolate {
         level: IsolationLevel,
         reason: String,
     },
     /// Emergency stop all agents
-    CircuitBreak {
-        reason: String,
-    },
+    CircuitBreak { reason: String },
     /// Kill agent, spawn replacement
     Replace {
         context_summary: String,
         new_model: Option<String>,
     },
     /// Switch to cheaper model, remove expensive tools
-    Degrade {
-        level: DegradeLevel,
-    },
+    Degrade { level: DegradeLevel },
     /// Route agent output to sandbox
-    Quarantine {
-        reason: String,
-    },
+    Quarantine { reason: String },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

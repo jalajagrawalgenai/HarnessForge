@@ -1,11 +1,21 @@
-use serde_json::json;
 use forge_sdk::types::audit::AuditEvent;
+use serde_json::json;
 
 #[allow(dead_code)]
-pub struct LangFuseExporter { public_key: String, secret_key: String, endpoint: String }
+pub struct LangFuseExporter {
+    public_key: String,
+    secret_key: String,
+    endpoint: String,
+}
 
 impl LangFuseExporter {
-    pub fn new(pk: &str, sk: &str, ep: &str) -> Self { Self { public_key: pk.into(), secret_key: sk.into(), endpoint: ep.into() } }
+    pub fn new(pk: &str, sk: &str, ep: &str) -> Self {
+        Self {
+            public_key: pk.into(),
+            secret_key: sk.into(),
+            endpoint: ep.into(),
+        }
+    }
     pub fn export_session(&self, session_id: &str, events: &[AuditEvent]) -> String {
         let trace = json!({
             "id": session_id, "name": "forge-session",

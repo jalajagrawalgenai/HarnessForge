@@ -1,11 +1,11 @@
 // LoopDetector — detects when agent calls same tool repeatedly with no progress
 
-use std::collections::HashMap;
-use std::sync::Mutex;
 use async_trait::async_trait;
-use uuid::Uuid;
 use forge_sdk::traits::detector::Detector;
 use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use uuid::Uuid;
 
 pub struct LoopDetector {
     /// (tool_name, args_hash) → count
@@ -36,7 +36,9 @@ impl LoopDetector {
 
 #[async_trait]
 impl Detector for LoopDetector {
-    fn name(&self) -> &'static str { "loop" }
+    fn name(&self) -> &'static str {
+        "loop"
+    }
     fn description(&self) -> &'static str {
         "Detects when an agent calls the same tool repeatedly without progress"
     }
@@ -76,11 +78,7 @@ impl Detector for LoopDetector {
                         tool_name, count, self.window_turns
                     ),
                     confidence: (*count as f64 / self.threshold as f64).min(1.0),
-                    suggested_actions: vec![
-                        "nudge".into(),
-                        "interject".into(),
-                        "replace".into(),
-                    ],
+                    suggested_actions: vec!["nudge".into(), "interject".into(), "replace".into()],
                     evidence_summary: format!(
                         "Tool '{}' called {} times, threshold={}",
                         tool_name, count, self.threshold

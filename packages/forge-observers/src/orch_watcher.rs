@@ -1,12 +1,13 @@
 use async_trait::async_trait;
-use std::sync::Mutex;
 use forge_sdk::events::AgentEvent;
 use forge_sdk::traits::observer::Observer;
+use std::sync::Mutex;
 
 pub struct OrchWatcher {
     agent_count: Mutex<u32>,
     forks: Mutex<u32>,
-    #[allow(dead_code)] max_depth: Mutex<u32>,
+    #[allow(dead_code)]
+    max_depth: Mutex<u32>,
 }
 
 #[allow(clippy::new_without_default)]
@@ -31,8 +32,12 @@ impl Observer for OrchWatcher {
     async fn observe(&self, event: &AgentEvent) -> Option<serde_json::Value> {
         match event {
             AgentEvent::Forked { .. } => {
-                if let Ok(mut f) = self.forks.lock() { *f += 1; }
-                if let Ok(mut a) = self.agent_count.lock() { *a += 1; }
+                if let Ok(mut f) = self.forks.lock() {
+                    *f += 1;
+                }
+                if let Ok(mut a) = self.agent_count.lock() {
+                    *a += 1;
+                }
             }
             AgentEvent::Completed { .. } | AgentEvent::Failed { .. } => {
                 if let Ok(mut a) = self.agent_count.lock() {

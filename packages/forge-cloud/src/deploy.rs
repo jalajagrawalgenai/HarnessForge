@@ -1,4 +1,8 @@
-pub enum CloudProvider { Aws, Azure, Gcp }
+pub enum CloudProvider {
+    Aws,
+    Azure,
+    Gcp,
+}
 
 pub struct CloudDeploy;
 

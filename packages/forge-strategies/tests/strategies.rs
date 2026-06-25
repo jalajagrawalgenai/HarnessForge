@@ -1,31 +1,45 @@
-use forge_strategies::nudge::NudgeStrategy;
-use forge_strategies::compact::CompactStrategy;
+use forge_sdk::traits::strategy::Strategy;
+use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
 use forge_strategies::circuit_break::CircuitBreakStrategy;
-use forge_strategies::pause::PauseStrategy;
-use forge_strategies::isolate::IsolateStrategy;
-use forge_strategies::diversify::DiversifyStrategy;
-use forge_strategies::replace::ReplaceStrategy;
+use forge_strategies::compact::CompactStrategy;
 use forge_strategies::degrade::DegradeStrategy;
-use forge_strategies::quarantine::QuarantineStrategy;
+use forge_strategies::diversify::DiversifyStrategy;
 use forge_strategies::escalate::EscalateStrategy;
 use forge_strategies::fork::ForkStrategy;
 use forge_strategies::interject::InterjectStrategy;
+use forge_strategies::isolate::IsolateStrategy;
+use forge_strategies::nudge::NudgeStrategy;
+use forge_strategies::pause::PauseStrategy;
+use forge_strategies::quarantine::QuarantineStrategy;
+use forge_strategies::replace::ReplaceStrategy;
 use forge_strategies::reroute::RerouteStrategy;
 use forge_strategies::rollback::RollbackStrategy;
-use forge_sdk::traits::strategy::Strategy;
-use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
 use uuid::Uuid;
 
 fn make_issue(category: IssueCategory, severity: Severity) -> DetectedIssue {
-    DetectedIssue { id: Uuid::new_v4(), agent_id: "test".into(), severity, category,
-        description: "test issue".into(), confidence: 0.95,
-        suggested_actions: vec!["nudge".into()], evidence_summary: "test".into() }
+    DetectedIssue {
+        id: Uuid::new_v4(),
+        agent_id: "test".into(),
+        severity,
+        category,
+        description: "test issue".into(),
+        confidence: 0.95,
+        suggested_actions: vec!["nudge".into()],
+        evidence_summary: "test".into(),
+    }
 }
 
 #[tokio::test]
 async fn test_nudge_strategy_for_loop() {
     let strategy = NudgeStrategy::new(3);
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "read".into(), call_count: 5, no_progress_turns: 5 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "read".into(),
+            call_count: 5,
+            no_progress_turns: 5,
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
     assert_eq!(result.unwrap().strategy_name, "nudge");
@@ -34,7 +48,14 @@ async fn test_nudge_strategy_for_loop() {
 #[tokio::test]
 async fn test_compact_strategy_for_stale_context() {
     let strategy = CompactStrategy::new(0.6);
-    let issue = make_issue(IssueCategory::StaleContext { file_path: "auth.rs".into(), read_count: 4, context_pressure: 0.88 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::StaleContext {
+            file_path: "auth.rs".into(),
+            read_count: 4,
+            context_pressure: 0.88,
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
     assert_eq!(result.unwrap().strategy_name, "compact");
@@ -43,7 +64,12 @@ async fn test_compact_strategy_for_stale_context() {
 #[tokio::test]
 async fn test_circuit_break_for_secret_leak() {
     let strategy = CircuitBreakStrategy;
-    let issue = make_issue(IssueCategory::SecretLeak { secret_type: "api_key".into() }, Severity::Critical);
+    let issue = make_issue(
+        IssueCategory::SecretLeak {
+            secret_type: "api_key".into(),
+        },
+        Severity::Critical,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -51,7 +77,14 @@ async fn test_circuit_break_for_secret_leak() {
 #[tokio::test]
 async fn test_circuit_break_ignores_warning() {
     let strategy = CircuitBreakStrategy;
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "read".into(), call_count: 3, no_progress_turns: 3 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "read".into(),
+            call_count: 3,
+            no_progress_turns: 3,
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_none());
 }
@@ -59,7 +92,12 @@ async fn test_circuit_break_ignores_warning() {
 #[tokio::test]
 async fn test_pause_strategy_for_critical() {
     let strategy = PauseStrategy;
-    let issue = make_issue(IssueCategory::SecretLeak { secret_type: "key".into() }, Severity::Critical);
+    let issue = make_issue(
+        IssueCategory::SecretLeak {
+            secret_type: "key".into(),
+        },
+        Severity::Critical,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -67,7 +105,12 @@ async fn test_pause_strategy_for_critical() {
 #[tokio::test]
 async fn test_isolate_strategy_for_error() {
     let strategy = IsolateStrategy;
-    let issue = make_issue(IssueCategory::SecretLeak { secret_type: "key".into() }, Severity::Error);
+    let issue = make_issue(
+        IssueCategory::SecretLeak {
+            secret_type: "key".into(),
+        },
+        Severity::Error,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -75,7 +118,13 @@ async fn test_isolate_strategy_for_error() {
 #[tokio::test]
 async fn test_diversify_strategy_for_variety_collapse() {
     let strategy = DiversifyStrategy;
-    let issue = make_issue(IssueCategory::VarietyCollapse { similarity_score: 0.9, agent_count: 4 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::VarietyCollapse {
+            similarity_score: 0.9,
+            agent_count: 4,
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -83,14 +132,28 @@ async fn test_diversify_strategy_for_variety_collapse() {
 #[tokio::test]
 async fn test_diversify_ignores_other_categories() {
     let strategy = DiversifyStrategy;
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "x".into(), call_count: 1, no_progress_turns: 1 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "x".into(),
+            call_count: 1,
+            no_progress_turns: 1,
+        },
+        Severity::Warning,
+    );
     assert!(strategy.evaluate(&issue).await.is_none());
 }
 
 #[tokio::test]
 async fn test_replace_strategy() {
     let strategy = ReplaceStrategy;
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "read".into(), call_count: 10, no_progress_turns: 10 }, Severity::Error);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "read".into(),
+            call_count: 10,
+            no_progress_turns: 10,
+        },
+        Severity::Error,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -98,7 +161,14 @@ async fn test_replace_strategy() {
 #[tokio::test]
 async fn test_degrade_strategy() {
     let strategy = DegradeStrategy;
-    let issue = make_issue(IssueCategory::CostAnomaly { expected_cost: 1.0, actual_cost: 5.0, multiplier: 5.0 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::CostAnomaly {
+            expected_cost: 1.0,
+            actual_cost: 5.0,
+            multiplier: 5.0,
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -106,7 +176,12 @@ async fn test_degrade_strategy() {
 #[tokio::test]
 async fn test_quarantine_strategy_for_secret() {
     let strategy = QuarantineStrategy;
-    let issue = make_issue(IssueCategory::SecretLeak { secret_type: "api_key".into() }, Severity::Critical);
+    let issue = make_issue(
+        IssueCategory::SecretLeak {
+            secret_type: "api_key".into(),
+        },
+        Severity::Critical,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -114,14 +189,28 @@ async fn test_quarantine_strategy_for_secret() {
 #[tokio::test]
 async fn test_quarantine_ignores_other() {
     let strategy = QuarantineStrategy;
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "x".into(), call_count: 1, no_progress_turns: 1 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "x".into(),
+            call_count: 1,
+            no_progress_turns: 1,
+        },
+        Severity::Warning,
+    );
     assert!(strategy.evaluate(&issue).await.is_none());
 }
 
 #[tokio::test]
 async fn test_escalate_strategy() {
     let strategy = EscalateStrategy;
-    let issue = make_issue(IssueCategory::ModelMismatch { task_complexity: "complex".into(), model_used: "haiku".into(), suggested_model: "sonnet".into() }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::ModelMismatch {
+            task_complexity: "complex".into(),
+            model_used: "haiku".into(),
+            suggested_model: "sonnet".into(),
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -129,7 +218,14 @@ async fn test_escalate_strategy() {
 #[tokio::test]
 async fn test_fork_strategy() {
     let strategy = ForkStrategy;
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "x".into(), call_count: 1, no_progress_turns: 1 }, Severity::Warning);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "x".into(),
+            call_count: 1,
+            no_progress_turns: 1,
+        },
+        Severity::Warning,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -137,7 +233,14 @@ async fn test_fork_strategy() {
 #[tokio::test]
 async fn test_interject_strategy() {
     let strategy = InterjectStrategy;
-    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "read".into(), call_count: 8, no_progress_turns: 8 }, Severity::Error);
+    let issue = make_issue(
+        IssueCategory::LoopDetected {
+            tool_name: "read".into(),
+            call_count: 8,
+            no_progress_turns: 8,
+        },
+        Severity::Error,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -145,7 +248,13 @@ async fn test_interject_strategy() {
 #[tokio::test]
 async fn test_reroute_strategy() {
     let strategy = RerouteStrategy;
-    let issue = make_issue(IssueCategory::Deadlock { agents: vec!["A".into(), "B".into()], wait_duration_secs: 60 }, Severity::Error);
+    let issue = make_issue(
+        IssueCategory::Deadlock {
+            agents: vec!["A".into(), "B".into()],
+            wait_duration_secs: 60,
+        },
+        Severity::Error,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -153,7 +262,12 @@ async fn test_reroute_strategy() {
 #[tokio::test]
 async fn test_rollback_strategy() {
     let strategy = RollbackStrategy;
-    let issue = make_issue(IssueCategory::AccuracyRisk { risk_factors: vec!["no_tests".into(), "lint_errors".into()] }, Severity::Error);
+    let issue = make_issue(
+        IssueCategory::AccuracyRisk {
+            risk_factors: vec!["no_tests".into(), "lint_errors".into()],
+        },
+        Severity::Error,
+    );
     let result = strategy.evaluate(&issue).await;
     assert!(result.is_some());
 }
@@ -162,11 +276,20 @@ async fn test_rollback_strategy() {
 async fn test_all_strategies_have_unique_names() {
     use std::collections::HashSet;
     let strategies: Vec<Box<dyn Strategy>> = vec![
-        Box::new(NudgeStrategy::new(3)), Box::new(CompactStrategy::new(0.6)),
-        Box::new(CircuitBreakStrategy), Box::new(PauseStrategy), Box::new(IsolateStrategy),
-        Box::new(DiversifyStrategy), Box::new(ReplaceStrategy), Box::new(DegradeStrategy),
-        Box::new(QuarantineStrategy), Box::new(EscalateStrategy), Box::new(ForkStrategy),
-        Box::new(InterjectStrategy), Box::new(RerouteStrategy), Box::new(RollbackStrategy),
+        Box::new(NudgeStrategy::new(3)),
+        Box::new(CompactStrategy::new(0.6)),
+        Box::new(CircuitBreakStrategy),
+        Box::new(PauseStrategy),
+        Box::new(IsolateStrategy),
+        Box::new(DiversifyStrategy),
+        Box::new(ReplaceStrategy),
+        Box::new(DegradeStrategy),
+        Box::new(QuarantineStrategy),
+        Box::new(EscalateStrategy),
+        Box::new(ForkStrategy),
+        Box::new(InterjectStrategy),
+        Box::new(RerouteStrategy),
+        Box::new(RollbackStrategy),
     ];
     let names: HashSet<&str> = strategies.iter().map(|s| s.name()).collect();
     assert_eq!(names.len(), 14, "all strategies must have unique names");

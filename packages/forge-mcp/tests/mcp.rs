@@ -1,13 +1,17 @@
 use forge_mcp::client::{McpClient, McpServerConfig};
-use forge_mcp::server::{McpServer, McpTool};
-use forge_mcp::gateway::McpGateway;
 use forge_mcp::discovery::McpDiscovery;
+use forge_mcp::gateway::McpGateway;
+use forge_mcp::server::{McpServer, McpTool};
 
 #[test]
 fn test_mcp_client() {
     let mut client = McpClient::new();
     assert_eq!(client.count(), 0);
-    client.add_server(McpServerConfig { name:"test".into(), transport:"stdio".into(), endpoint:"http://localhost".into() });
+    client.add_server(McpServerConfig {
+        name: "test".into(),
+        transport: "stdio".into(),
+        endpoint: "http://localhost".into(),
+    });
     assert_eq!(client.count(), 1);
     assert_eq!(client.servers().len(), 1);
 }

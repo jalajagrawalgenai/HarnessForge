@@ -1,12 +1,12 @@
 // forge-harness/src/pipeline.rs — Observe→Detect→Strategy→Action→Audit loop
 
-use std::sync::Arc;
-use std::time::Instant;
 use forge_sdk::events::{AgentEvent, Intervention};
 use forge_sdk::traits::store::AuditStore;
 use forge_sdk::types::audit::{AuditEvent, AuditPhase};
 use forge_sdk::types::detection::DetectedIssue;
 use forge_sdk::types::strategy::StrategyResult;
+use std::sync::Arc;
+use std::time::Instant;
 
 use crate::event_bus::EventBus;
 use crate::human_gate::HumanGate;
@@ -252,11 +252,7 @@ impl Pipeline {
             cycles: self.cycles.len(),
             total_detections,
             total_interventions,
-            avg_cycle_us: self
-                .cycles
-                .iter()
-                .map(|c| c.duration_us)
-                .sum::<u64>()
+            avg_cycle_us: self.cycles.iter().map(|c| c.duration_us).sum::<u64>()
                 / self.cycles.len().max(1) as u64,
         }
     }

@@ -14,6 +14,6 @@ pub use agent::AgentAdapter;
 pub use agent::AgentType;
 pub use agent::BridgeMethod;
 pub use agent::MockAgent;
-pub use harness::{Harness, HarnessBuilder, HarnessConfig, HarnessRuntime, HarnessRunResult};
-pub use presets::Preset;
+pub use harness::{Harness, HarnessBuilder, HarnessConfig, HarnessRunResult, HarnessRuntime};
 pub use prelude::*;
+pub use presets::Preset;

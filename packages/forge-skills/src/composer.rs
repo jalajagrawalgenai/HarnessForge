@@ -9,12 +9,31 @@ impl SkillComposer {
         let mut strategies = Vec::new();
         let mut preset = None;
         for skill in skills {
-            for o in &skill.observers { if !observers.contains(o) { observers.push(o.clone()); } }
-            for d in &skill.detectors { if !detectors.contains(d) { detectors.push(d.clone()); } }
-            for s in &skill.strategies { if !strategies.contains(s) { strategies.push(s.clone()); } }
-            if skill.preset.is_some() { preset = skill.preset.clone(); }
+            for o in &skill.observers {
+                if !observers.contains(o) {
+                    observers.push(o.clone());
+                }
+            }
+            for d in &skill.detectors {
+                if !detectors.contains(d) {
+                    detectors.push(d.clone());
+                }
+            }
+            for s in &skill.strategies {
+                if !strategies.contains(s) {
+                    strategies.push(s.clone());
+                }
+            }
+            if skill.preset.is_some() {
+                preset = skill.preset.clone();
+            }
         }
-        ComposedConfig { preset, observers, detectors, strategies }
+        ComposedConfig {
+            preset,
+            observers,
+            detectors,
+            strategies,
+        }
     }
 }
 

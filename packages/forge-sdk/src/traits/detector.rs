@@ -1,7 +1,7 @@
 // forge-sdk/src/traits/detector.rs — Detector trait
 
-use async_trait::async_trait;
 use crate::types::detection::DetectedIssue;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait Detector: Send + Sync {

@@ -1,5 +1,5 @@
-use forge_bridge::models::ModelCatalog;
 use forge_bridge::cost::CostCalculator;
+use forge_bridge::models::ModelCatalog;
 
 #[test]
 fn test_model_catalog_default() {

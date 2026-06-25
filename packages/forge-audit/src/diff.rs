@@ -5,7 +5,8 @@ pub struct AuditDiff;
 impl AuditDiff {
     pub fn compare(a: &AuditReport, b: &AuditReport) -> DiffResult {
         DiffResult {
-            session_a: a.session_id.to_string(), session_b: b.session_id.to_string(),
+            session_a: a.session_id.to_string(),
+            session_b: b.session_id.to_string(),
             token_delta: b.total_tokens as i64 - a.total_tokens as i64,
             cost_delta: b.total_cost - a.total_cost,
             duration_delta: b.duration_secs - a.duration_secs,
@@ -18,7 +19,12 @@ impl AuditDiff {
 
 #[derive(Debug)]
 pub struct DiffResult {
-    pub session_a: String, pub session_b: String,
-    pub token_delta: i64, pub cost_delta: f64, pub duration_delta: f64,
-    pub detection_delta: i64, pub intervention_delta: i64, pub health_delta: f64,
+    pub session_a: String,
+    pub session_b: String,
+    pub token_delta: i64,
+    pub cost_delta: f64,
+    pub duration_delta: f64,
+    pub detection_delta: i64,
+    pub intervention_delta: i64,
+    pub health_delta: f64,
 }

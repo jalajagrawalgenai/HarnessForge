@@ -1,15 +1,15 @@
 // forge-audit/src/store_sqlite.rs — SQLite-backed audit store
 
-use std::str::FromStr;
 use async_trait::async_trait;
 use forge_sdk::error::ForgeError;
 use forge_sdk::traits::store::AuditStore;
 use forge_sdk::types::audit::{
-    AuditEvent, AuditPhase, AuditReport, Checkpoint, CheckpointSummary,
-    DetectionSummary, InterventionSummary, ObservationSummary,
+    AuditEvent, AuditPhase, AuditReport, Checkpoint, CheckpointSummary, DetectionSummary,
+    InterventionSummary, ObservationSummary,
 };
 use sqlx::sqlite::SqlitePool;
 use sqlx::Row;
+use std::str::FromStr;
 use uuid::Uuid;
 
 pub struct SqliteAuditStore {
@@ -135,17 +135,31 @@ impl AuditStore for SqliteAuditStore {
         let mut sql = String::from(
             "SELECT id, session_id, agent_id, trace_id, sequence, phase, event_type, event_data, parent_event, checkpoint_ref, hash_chain, created_at FROM audit_events WHERE 1=1",
         );
-        if session_id.is_some() { sql.push_str(" AND session_id = ?"); }
-        if phase.is_some() { sql.push_str(" AND LOWER(phase) = LOWER(?)"); }
+        if session_id.is_some() {
+            sql.push_str(" AND session_id = ?");
+        }
+        if phase.is_some() {
+            sql.push_str(" AND LOWER(phase) = LOWER(?)");
+        }
         sql.push_str(" ORDER BY sequence ASC");
-        if let Some(lim) = limit { sql.push_str(&format!(" LIMIT {}", lim)); }
-        if let Some(off) = offset { sql.push_str(&format!(" OFFSET {}", off)); }
+        if let Some(lim) = limit {
+            sql.push_str(&format!(" LIMIT {}", lim));
+        }
+        if let Some(off) = offset {
+            sql.push_str(&format!(" OFFSET {}", off));
+        }
 
         let mut q = sqlx::query(&sql);
-        if let Some(sid) = session_id { q = q.bind(sid); }
-        if let Some(p) = phase { q = q.bind(p); }
+        if let Some(sid) = session_id {
+            q = q.bind(sid);
+        }
+        if let Some(p) = phase {
+            q = q.bind(p);
+        }
 
-        let rows = q.fetch_all(&self.pool).await
+        let rows = q
+            .fetch_all(&self.pool)
+            .await
             .map_err(|e| ForgeError::Audit(e.to_string()))?;
         rows.iter().map(Self::row_to_event).collect()
     }
@@ -164,7 +178,10 @@ impl AuditStore for SqliteAuditStore {
     async fn get_report(&self, session_id: &str) -> Result<AuditReport, ForgeError> {
         let events = self.replay_session(session_id).await?;
         if events.is_empty() {
-            return Err(ForgeError::Audit(format!("No events for session {}", session_id)));
+            return Err(ForgeError::Audit(format!(
+                "No events for session {}",
+                session_id
+            )));
         }
         let sid = Uuid::from_str(session_id).unwrap_or_else(|_| Uuid::nil());
         let first = events.first().unwrap();
@@ -178,33 +195,83 @@ impl AuditStore for SqliteAuditStore {
             }
         }
         let observations: Vec<ObservationSummary> = dims
-            .into_iter().map(|(dim, count)| ObservationSummary { dimension: dim, event_count: count })
+            .into_iter()
+            .map(|(dim, count)| ObservationSummary {
+                dimension: dim,
+                event_count: count,
+            })
             .collect();
-        let detections: Vec<DetectionSummary> = events.iter()
+        let detections: Vec<DetectionSummary> = events
+            .iter()
             .filter(|e| e.phase == AuditPhase::Detect)
             .map(|e| DetectionSummary {
-                turn: 0, detector: e.event_type.clone(),
-                category: e.event_data.get("category").and_then(|v| v.as_str()).unwrap_or("unknown").into(),
-                severity: e.event_data.get("severity").and_then(|v| v.as_str()).unwrap_or("info").into(),
-                confidence: e.event_data.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0),
-            }).collect();
-        let interventions: Vec<InterventionSummary> = events.iter()
+                turn: 0,
+                detector: e.event_type.clone(),
+                category: e
+                    .event_data
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .into(),
+                severity: e
+                    .event_data
+                    .get("severity")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("info")
+                    .into(),
+                confidence: e
+                    .event_data
+                    .get("confidence")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0),
+            })
+            .collect();
+        let interventions: Vec<InterventionSummary> = events
+            .iter()
             .filter(|e| e.phase == AuditPhase::Action)
-            .map(|e| InterventionSummary { turn: 0, strategy: e.event_type.clone(), outcome: "applied".into(), impact: None })
+            .map(|e| InterventionSummary {
+                turn: 0,
+                strategy: e.event_type.clone(),
+                outcome: "applied".into(),
+                impact: None,
+            })
             .collect();
         let cp_rows = sqlx::query("SELECT id FROM checkpoints WHERE session_id = ?")
-            .bind(session_id).fetch_all(&self.pool).await
+            .bind(session_id)
+            .fetch_all(&self.pool)
+            .await
             .map_err(|e| ForgeError::Audit(e.to_string()))?;
-        let checkpoints: Vec<CheckpointSummary> = cp_rows.iter()
-            .map(|_| CheckpointSummary { turn: 0, reason: "saved".into() }).collect();
-        let total_tokens: u64 = events.iter()
-            .filter_map(|e| e.event_data.get("token_count").or_else(|| e.event_data.get("total_tokens")).and_then(|v| v.as_u64()))
+        let checkpoints: Vec<CheckpointSummary> = cp_rows
+            .iter()
+            .map(|_| CheckpointSummary {
+                turn: 0,
+                reason: "saved".into(),
+            })
+            .collect();
+        let total_tokens: u64 = events
+            .iter()
+            .filter_map(|e| {
+                e.event_data
+                    .get("token_count")
+                    .or_else(|| e.event_data.get("total_tokens"))
+                    .and_then(|v| v.as_u64())
+            })
             .sum();
 
         Ok(AuditReport {
-            session_id: sid, task: String::new(), agent_type: String::new(), model: String::new(),
-            duration_secs: duration, total_tokens, total_cost: 0.0, health_score: None,
-            observations, detections, interventions, checkpoints, harness_effectiveness: None,
+            session_id: sid,
+            task: String::new(),
+            agent_type: String::new(),
+            model: String::new(),
+            duration_secs: duration,
+            total_tokens,
+            total_cost: 0.0,
+            health_score: None,
+            observations,
+            detections,
+            interventions,
+            checkpoints,
+            harness_effectiveness: None,
         })
     }
 
@@ -252,7 +319,9 @@ impl AuditStore for SqliteAuditStore {
                 let ca_str: String = r.get(11);
 
                 Ok(Some(Checkpoint {
-                    id, event_id, session_id,
+                    id,
+                    event_id,
+                    session_id,
                     agent_states: serde_json::from_str(&as_str).unwrap_or_default(),
                     context_snapshot: cs_str.and_then(|s| serde_json::from_str(&s).ok()),
                     message_queue: mq_str.and_then(|s| serde_json::from_str(&s).ok()),

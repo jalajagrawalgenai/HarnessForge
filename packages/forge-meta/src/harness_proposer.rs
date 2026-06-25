@@ -1,5 +1,5 @@
+use crate::weakness_miner::{FailureSignature, WeaknessPattern};
 use forge_sdk::error::ForgeError;
-use crate::weakness_miner::{WeaknessPattern, FailureSignature};
 
 pub struct HarnessProposer;
 
@@ -25,14 +25,24 @@ pub enum EditTarget {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum EditChange {
-    ModifyValue { old: serde_json::Value, new: serde_json::Value },
-    AddRule { condition: String, action: String },
-    RemoveRule { rule_id: String },
+    ModifyValue {
+        old: serde_json::Value,
+        new: serde_json::Value,
+    },
+    AddRule {
+        condition: String,
+        action: String,
+    },
+    RemoveRule {
+        rule_id: String,
+    },
 }
 
 impl HarnessProposer {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     pub fn propose(
         &self,
@@ -57,7 +67,11 @@ impl HarnessProposer {
         let mut candidates = Vec::new();
 
         match &pattern.signature {
-            FailureSignature::LateDetection { detector, avg_detection_turn, .. } => {
+            FailureSignature::LateDetection {
+                detector,
+                avg_detection_turn,
+                ..
+            } => {
                 // Lower the detection threshold for this detector
                 candidates.push(HarnessEdit {
                     id: format!("edit_{}", uuid::Uuid::new_v4()),
@@ -89,7 +103,9 @@ impl HarnessProposer {
                         old: serde_json::json!(0.85),
                         new: serde_json::json!(0.75),
                     },
-                    rationale: "Compact context earlier to prevent overflow before loop detection fires.".into(),
+                    rationale:
+                        "Compact context earlier to prevent overflow before loop detection fires."
+                            .into(),
                     affected_models: vec![pattern.model_family.clone()],
                     min_chars: 60,
                 });
@@ -117,7 +133,10 @@ impl HarnessProposer {
                 });
             }
 
-            FailureSignature::MissedDetection { pattern_description, should_have_detected } => {
+            FailureSignature::MissedDetection {
+                pattern_description,
+                should_have_detected,
+            } => {
                 candidates.push(HarnessEdit {
                     id: format!("edit_{}", uuid::Uuid::new_v4()),
                     weakness_id: pattern.id.clone(),
@@ -135,11 +154,16 @@ impl HarnessProposer {
                 });
             }
 
-            FailureSignature::ModelSpecific { model, pattern: failure_pattern } => {
+            FailureSignature::ModelSpecific {
+                model,
+                pattern: failure_pattern,
+            } => {
                 candidates.push(HarnessEdit {
                     id: format!("edit_{}", uuid::Uuid::new_v4()),
                     weakness_id: pattern.id.clone(),
-                    target: EditTarget::PresetUpdate { preset: format!("model_{}", model) },
+                    target: EditTarget::PresetUpdate {
+                        preset: format!("model_{}", model),
+                    },
                     change: EditChange::ModifyValue {
                         old: serde_json::json!("default"),
                         new: serde_json::json!(format!("optimized_for_{}", model)),
@@ -153,7 +177,10 @@ impl HarnessProposer {
                 });
             }
 
-            FailureSignature::FalsePositive { detector, false_positive_rate: fpr } => {
+            FailureSignature::FalsePositive {
+                detector,
+                false_positive_rate: fpr,
+            } => {
                 candidates.push(HarnessEdit {
                     id: format!("edit_{}", uuid::Uuid::new_v4()),
                     weakness_id: pattern.id.clone(),
@@ -167,7 +194,8 @@ impl HarnessProposer {
                     },
                     rationale: format!(
                         "{} has {:.0}% false positive rate. Raising threshold to reduce noise.",
-                        detector, fpr * 100.0
+                        detector,
+                        fpr * 100.0
                     ),
                     affected_models: vec![pattern.model_family.clone()],
                     min_chars: 50,

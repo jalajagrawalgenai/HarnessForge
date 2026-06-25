@@ -1,10 +1,10 @@
 // forge-harness/src/plugin_registry.rs — Observer/Detector/Strategy registry
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use forge_sdk::traits::detector::Detector;
 use forge_sdk::traits::observer::Observer;
 use forge_sdk::traits::strategy::Strategy;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Manages registration and lookup of all harness plugins
 #[derive(Default)]
@@ -22,8 +22,7 @@ impl PluginRegistry {
     // ─── Observers ───
 
     pub fn register_observer(&mut self, observer: Arc<dyn Observer>) {
-        self.observers
-            .insert(observer.name().to_string(), observer);
+        self.observers.insert(observer.name().to_string(), observer);
     }
 
     pub fn observers(&self) -> Vec<&Arc<dyn Observer>> {
@@ -37,8 +36,7 @@ impl PluginRegistry {
     // ─── Detectors ───
 
     pub fn register_detector(&mut self, detector: Arc<dyn Detector>) {
-        self.detectors
-            .insert(detector.name().to_string(), detector);
+        self.detectors.insert(detector.name().to_string(), detector);
     }
 
     pub fn detectors(&self) -> Vec<&Arc<dyn Detector>> {
@@ -54,7 +52,8 @@ impl PluginRegistry {
     pub fn register_strategy(&mut self, strategy: Arc<dyn Strategy>) {
         self.strategies.push(strategy);
         // Keep sorted by priority (highest first)
-        self.strategies.sort_by_key(|s| std::cmp::Reverse(s.priority()));
+        self.strategies
+            .sort_by_key(|s| std::cmp::Reverse(s.priority()));
     }
 
     pub fn strategies(&self) -> &[Arc<dyn Strategy>] {

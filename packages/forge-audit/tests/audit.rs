@@ -1,9 +1,12 @@
-use forge_audit::trail::AuditTrail;
+use chrono::Utc;
+use forge_audit::explainer;
 use forge_audit::search::SearchEngine;
 use forge_audit::signing;
-use forge_audit::explainer;
-use forge_sdk::types::audit::{AuditEvent, AuditPhase, AuditReport, CheckpointSummary, DetectionSummary, InterventionSummary, ObservationSummary};
-use chrono::Utc;
+use forge_audit::trail::AuditTrail;
+use forge_sdk::types::audit::{
+    AuditEvent, AuditPhase, AuditReport, CheckpointSummary, DetectionSummary, InterventionSummary,
+    ObservationSummary,
+};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -11,7 +14,13 @@ use uuid::Uuid;
 fn test_audit_trail_record() {
     let sid = Uuid::new_v4();
     let mut trail = AuditTrail::new(sid);
-    let id = trail.record(AuditPhase::Observe, "token_usage", json!({"tokens": 100}), None, None);
+    let id = trail.record(
+        AuditPhase::Observe,
+        "token_usage",
+        json!({"tokens": 100}),
+        None,
+        None,
+    );
     assert!(id >= 0);
     assert_eq!(trail.events().len(), 1);
     assert_eq!(trail.query_by_phase(AuditPhase::Observe).len(), 1);
@@ -51,8 +60,20 @@ fn test_audit_trail_clean_integrity() {
 fn test_search_engine() {
     let sid = Uuid::new_v4();
     let mut trail = AuditTrail::new(sid);
-    trail.record(AuditPhase::Detect, "loop_detected", json!({"tool": "read"}), None, None);
-    trail.record(AuditPhase::Detect, "secret_leak", json!({"type": "api_key"}), None, None);
+    trail.record(
+        AuditPhase::Detect,
+        "loop_detected",
+        json!({"tool": "read"}),
+        None,
+        None,
+    );
+    trail.record(
+        AuditPhase::Detect,
+        "secret_leak",
+        json!({"type": "api_key"}),
+        None,
+        None,
+    );
     let results = SearchEngine::search(trail.events(), "loop");
     assert_eq!(results.len(), 1);
 }
@@ -67,13 +88,35 @@ fn test_signing_standalone() {
 #[test]
 fn test_explainer_output() {
     let report = AuditReport {
-        session_id: Uuid::new_v4(), task: "Build auth".into(), agent_type: "solo".into(),
-        model: "claude-sonnet".into(), duration_secs: 120.0, total_tokens: 5000, total_cost: 0.05,
+        session_id: Uuid::new_v4(),
+        task: "Build auth".into(),
+        agent_type: "solo".into(),
+        model: "claude-sonnet".into(),
+        duration_secs: 120.0,
+        total_tokens: 5000,
+        total_cost: 0.05,
         health_score: Some(0.91),
-        observations: vec![ObservationSummary { dimension: "token".into(), event_count: 10 }],
-        detections: vec![DetectionSummary { turn: 5, detector: "loop".into(), category: "loop".into(), severity: "warning".into(), confidence: 0.91 }],
-        interventions: vec![InterventionSummary { turn: 5, strategy: "nudge".into(), outcome: "applied".into(), impact: Some("broke loop".into()) }],
-        checkpoints: vec![CheckpointSummary { turn: 5, reason: "pre-intervention".into() }],
+        observations: vec![ObservationSummary {
+            dimension: "token".into(),
+            event_count: 10,
+        }],
+        detections: vec![DetectionSummary {
+            turn: 5,
+            detector: "loop".into(),
+            category: "loop".into(),
+            severity: "warning".into(),
+            confidence: 0.91,
+        }],
+        interventions: vec![InterventionSummary {
+            turn: 5,
+            strategy: "nudge".into(),
+            outcome: "applied".into(),
+            impact: Some("broke loop".into()),
+        }],
+        checkpoints: vec![CheckpointSummary {
+            turn: 5,
+            reason: "pre-intervention".into(),
+        }],
         harness_effectiveness: Some(0.94),
     };
     let text = explainer::explain(&report);
@@ -81,4 +124,3 @@ fn test_explainer_output() {
     assert!(text.contains("Build auth"));
     assert!(text.contains("loop"));
 }
-

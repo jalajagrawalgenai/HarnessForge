@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 use crate::agent::AgentAdapter;
 use crate::error::ForgeError;
@@ -151,7 +151,8 @@ impl Harness {
     ) -> Result<HarnessRunResult, ForgeError> {
         let agent_id = agent.id();
         let (event_tx, _event_rx) = tokio::sync::mpsc::channel::<crate::events::AgentEvent>(256);
-        let (_intervention_tx, intervention_rx) = tokio::sync::mpsc::channel::<crate::events::Intervention>(64);
+        let (_intervention_tx, intervention_rx) =
+            tokio::sync::mpsc::channel::<crate::events::Intervention>(64);
 
         let outcome = agent.run(task, event_tx, intervention_rx).await?;
 

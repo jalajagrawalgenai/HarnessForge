@@ -10,8 +10,12 @@ pub struct CircuitBreakStrategy;
 
 #[async_trait]
 impl Strategy for CircuitBreakStrategy {
-    fn name(&self) -> &'static str { "circuit_break" }
-    fn priority(&self) -> u32 { 100 } // Highest priority — always wins if conditions met
+    fn name(&self) -> &'static str {
+        "circuit_break"
+    }
+    fn priority(&self) -> u32 {
+        100
+    } // Highest priority — always wins if conditions met
 
     async fn evaluate(&self, detection: &DetectedIssue) -> Option<StrategyResult> {
         // Only circuit break on critical security/compliance issues

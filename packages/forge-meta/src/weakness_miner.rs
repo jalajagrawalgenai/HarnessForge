@@ -1,8 +1,10 @@
-use std::collections::HashMap;
-use forge_sdk::error::ForgeError;
 use crate::SessionAudit;
+use forge_sdk::error::ForgeError;
+use std::collections::HashMap;
 
-pub struct WeaknessMiner { min_sessions: usize }
+pub struct WeaknessMiner {
+    min_sessions: usize,
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WeaknessPattern {
@@ -17,15 +19,33 @@ pub struct WeaknessPattern {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum FailureSignature {
-    LateDetection { detector: String, avg_detection_turn: f64, consequence: String },
-    MissedDetection { pattern_description: String, should_have_detected: String },
-    IneffectiveIntervention { strategy: String, reason: String },
-    FalsePositive { detector: String, false_positive_rate: f64 },
-    ModelSpecific { model: String, pattern: String },
+    LateDetection {
+        detector: String,
+        avg_detection_turn: f64,
+        consequence: String,
+    },
+    MissedDetection {
+        pattern_description: String,
+        should_have_detected: String,
+    },
+    IneffectiveIntervention {
+        strategy: String,
+        reason: String,
+    },
+    FalsePositive {
+        detector: String,
+        false_positive_rate: f64,
+    },
+    ModelSpecific {
+        model: String,
+        pattern: String,
+    },
 }
 
 impl WeaknessMiner {
-    pub fn new(min_sessions: usize) -> Self { Self { min_sessions } }
+    pub fn new(min_sessions: usize) -> Self {
+        Self { min_sessions }
+    }
 
     pub fn mine(&self, audits: &[SessionAudit]) -> Result<Vec<WeaknessPattern>, ForgeError> {
         if audits.len() < self.min_sessions {
@@ -39,7 +59,10 @@ impl WeaknessMiner {
         for audit in audits {
             if !audit.success && audit.detection_count > 0 {
                 let key = format!("late_detection_{}", audit.agent_type);
-                let entry = late_detections.entry(key).or_insert((0, 0.0, "context_overflow".into()));
+                let entry =
+                    late_detections
+                        .entry(key)
+                        .or_insert((0, 0.0, "context_overflow".into()));
                 entry.0 += 1;
                 entry.1 += audit.duration_secs;
             }
@@ -53,10 +76,15 @@ impl WeaknessMiner {
                         avg_detection_turn: *avg_time / *count as f64,
                         consequence: consequence.clone(),
                     },
-                    model_family: "all".into(), agent_type: "solo".into(),
+                    model_family: "all".into(),
+                    agent_type: "solo".into(),
                     occurrence_count: *count,
                     severity_score: (*count as f64 / audits.len() as f64).min(1.0),
-                    evidence_sessions: audits.iter().filter(|a| !a.success).map(|a| a.session_id.clone()).collect(),
+                    evidence_sessions: audits
+                        .iter()
+                        .filter(|a| !a.success)
+                        .map(|a| a.session_id.clone())
+                        .collect(),
                 });
             }
         }
@@ -78,7 +106,8 @@ impl WeaknessMiner {
                         strategy: "nudge".into(),
                         reason: pattern.clone(),
                     },
-                    model_family: "all".into(), agent_type: "solo".into(),
+                    model_family: "all".into(),
+                    agent_type: "solo".into(),
                     occurrence_count: *count,
                     severity_score: (*count as f64 / audits.len() as f64 * 2.0).min(1.0),
                     evidence_sessions: Vec::new(),
@@ -89,9 +118,17 @@ impl WeaknessMiner {
         // ─── 3. Find model-specific failure patterns ───
         let mut model_failures: HashMap<String, (u32, f64)> = HashMap::new();
         for audit in audits {
-            let _key = format!("{}_{}", audit.model, if audit.success { "success" } else { "failure" });
-            let entry = model_failures.entry(audit.model.clone()).or_insert((0, 0.0));
-            if !audit.success { entry.0 += 1; }
+            let _key = format!(
+                "{}_{}",
+                audit.model,
+                if audit.success { "success" } else { "failure" }
+            );
+            let entry = model_failures
+                .entry(audit.model.clone())
+                .or_insert((0, 0.0));
+            if !audit.success {
+                entry.0 += 1;
+            }
         }
         for (model, (failures, _)) in &model_failures {
             let total = audits.iter().filter(|a| &a.model == model).count();
@@ -103,10 +140,15 @@ impl WeaknessMiner {
                         model: model.clone(),
                         pattern: format!("{:.0}% failure rate", fail_rate * 100.0),
                     },
-                    model_family: model.clone(), agent_type: "all".into(),
+                    model_family: model.clone(),
+                    agent_type: "all".into(),
                     occurrence_count: *failures,
                     severity_score: fail_rate,
-                    evidence_sessions: audits.iter().filter(|a| &a.model == model && !a.success).map(|a| a.session_id.clone()).collect(),
+                    evidence_sessions: audits
+                        .iter()
+                        .filter(|a| &a.model == model && !a.success)
+                        .map(|a| a.session_id.clone())
+                        .collect(),
                 });
             }
         }
@@ -129,10 +171,14 @@ impl WeaknessMiner {
                         pattern_description: cluster_key.clone(),
                         should_have_detected: "error_pattern".into(),
                     },
-                    model_family: "all".into(), agent_type: "all".into(),
+                    model_family: "all".into(),
+                    agent_type: "all".into(),
                     occurrence_count: cluster_audits.len() as u32,
                     severity_score: (cluster_audits.len() as f64 / 10.0).min(1.0),
-                    evidence_sessions: cluster_audits.iter().map(|a| a.session_id.clone()).collect(),
+                    evidence_sessions: cluster_audits
+                        .iter()
+                        .map(|a| a.session_id.clone())
+                        .collect(),
                 });
             }
         }

@@ -4,12 +4,17 @@ use forge_sdk::traits::store::AuditStore;
 use forge_sdk::types::audit::{AuditEvent, AuditReport, Checkpoint};
 use sqlx::postgres::PgPool;
 
-pub struct PostgresAuditStore { pool: PgPool }
+pub struct PostgresAuditStore {
+    pool: PgPool,
+}
 
 impl PostgresAuditStore {
     pub async fn new(url: &str) -> Result<Self, ForgeError> {
-        let pool = PgPool::connect(url).await.map_err(|e| ForgeError::Audit(e.to_string()))?;
-        sqlx::query(r#"
+        let pool = PgPool::connect(url)
+            .await
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
+        sqlx::query(
+            r#"
             CREATE TABLE IF NOT EXISTS audit_events (
                 id BIGSERIAL PRIMARY KEY, session_id UUID NOT NULL, agent_id UUID,
                 trace_id UUID NOT NULL, sequence BIGINT NOT NULL, phase TEXT NOT NULL,
@@ -21,7 +26,11 @@ impl PostgresAuditStore {
             );
             CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_events(session_id);
             CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_events(created_at DESC);
-        "#).execute(&pool).await.map_err(|e| ForgeError::Audit(e.to_string()))?;
+        "#,
+        )
+        .execute(&pool)
+        .await
+        .map_err(|e| ForgeError::Audit(e.to_string()))?;
         Ok(Self { pool })
     }
 }
@@ -38,16 +47,34 @@ impl AuditStore for PostgresAuditStore {
         .fetch_one(&self.pool).await.map_err(|e| ForgeError::Audit(e.to_string()))?;
         Ok(row.0)
     }
-    async fn query(&self, _session_id: Option<&str>, _phase: Option<&str>, _limit: Option<u32>, _offset: Option<u32>) -> Result<Vec<AuditEvent>, ForgeError> {
+    async fn query(
+        &self,
+        _session_id: Option<&str>,
+        _phase: Option<&str>,
+        _limit: Option<u32>,
+        _offset: Option<u32>,
+    ) -> Result<Vec<AuditEvent>, ForgeError> {
         Ok(Vec::new()) // Stub — full impl would use sqlx::query_as
     }
     async fn search(&self, query: &str) -> Result<Vec<AuditEvent>, ForgeError> {
-        let _rows: Vec<(i64,)> = sqlx::query_as("SELECT id FROM audit_events WHERE search_text ILIKE $1 LIMIT 100")
-            .bind(format!("%{}%", query)).fetch_all(&self.pool).await.map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let _rows: Vec<(i64,)> =
+            sqlx::query_as("SELECT id FROM audit_events WHERE search_text ILIKE $1 LIMIT 100")
+                .bind(format!("%{}%", query))
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| ForgeError::Audit(e.to_string()))?;
         Ok(Vec::new())
     }
-    async fn get_report(&self, _sid: &str) -> Result<AuditReport, ForgeError> { Err(ForgeError::Audit("Not implemented".into())) }
-    async fn save_checkpoint(&self, _cp: &Checkpoint) -> Result<(), ForgeError> { Ok(()) }
-    async fn load_checkpoint(&self, _cid: &str) -> Result<Option<Checkpoint>, ForgeError> { Ok(None) }
-    async fn replay_session(&self, _sid: &str) -> Result<Vec<AuditEvent>, ForgeError> { Ok(Vec::new()) }
+    async fn get_report(&self, _sid: &str) -> Result<AuditReport, ForgeError> {
+        Err(ForgeError::Audit("Not implemented".into()))
+    }
+    async fn save_checkpoint(&self, _cp: &Checkpoint) -> Result<(), ForgeError> {
+        Ok(())
+    }
+    async fn load_checkpoint(&self, _cid: &str) -> Result<Option<Checkpoint>, ForgeError> {
+        Ok(None)
+    }
+    async fn replay_session(&self, _sid: &str) -> Result<Vec<AuditEvent>, ForgeError> {
+        Ok(Vec::new())
+    }
 }

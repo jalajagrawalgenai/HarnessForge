@@ -1,14 +1,14 @@
 // forge-audit/src/store_memory.rs — In-memory audit store (full implementation)
 
-use std::collections::HashMap;
-use std::sync::Mutex;
 use async_trait::async_trait;
 use forge_sdk::error::ForgeError;
 use forge_sdk::traits::store::AuditStore;
 use forge_sdk::types::audit::{
-    AuditEvent, AuditPhase, AuditReport, Checkpoint, CheckpointSummary,
-    DetectionSummary, InterventionSummary, ObservationSummary,
+    AuditEvent, AuditPhase, AuditReport, Checkpoint, CheckpointSummary, DetectionSummary,
+    InterventionSummary, ObservationSummary,
 };
+use std::collections::HashMap;
+use std::sync::Mutex;
 #[allow(unused_imports)]
 use uuid::Uuid;
 
@@ -36,7 +36,10 @@ impl Default for MemoryAuditStore {
 #[async_trait]
 impl AuditStore for MemoryAuditStore {
     async fn append(&self, event: &AuditEvent) -> Result<i64, ForgeError> {
-        let mut events = self.events.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let mut events = self
+            .events
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         let id = events.len() as i64 + 1;
         let mut event = event.clone();
         event.id = id;
@@ -51,14 +54,16 @@ impl AuditStore for MemoryAuditStore {
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<Vec<AuditEvent>, ForgeError> {
-        let events = self.events.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let events = self
+            .events
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         let mut filtered: Vec<AuditEvent> = events
             .iter()
             .filter(|e| {
                 let sid_match = session_id.is_none_or(|s| e.session_id.to_string() == s);
-                let phase_match = phase.is_none_or(|p| {
-                    format!("{:?}", e.phase).to_lowercase() == p.to_lowercase()
-                });
+                let phase_match = phase
+                    .is_none_or(|p| format!("{:?}", e.phase).to_lowercase() == p.to_lowercase());
                 sid_match && phase_match
             })
             .cloned()
@@ -73,7 +78,10 @@ impl AuditStore for MemoryAuditStore {
     }
 
     async fn search(&self, query: &str) -> Result<Vec<AuditEvent>, ForgeError> {
-        let events = self.events.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let events = self
+            .events
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         let q = query.to_lowercase();
         Ok(events
             .iter()
@@ -90,13 +98,19 @@ impl AuditStore for MemoryAuditStore {
     }
 
     async fn get_report(&self, session_id: &str) -> Result<AuditReport, ForgeError> {
-        let events = self.events.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let events = self
+            .events
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         let se: Vec<&AuditEvent> = events
             .iter()
             .filter(|e| e.session_id.to_string() == session_id)
             .collect();
         if se.is_empty() {
-            return Err(ForgeError::Audit(format!("No events for session {}", session_id)));
+            return Err(ForgeError::Audit(format!(
+                "No events for session {}",
+                session_id
+            )));
         }
         let first = se.first().unwrap();
         let last = se.last().unwrap();
@@ -110,7 +124,10 @@ impl AuditStore for MemoryAuditStore {
         }
         let observations: Vec<ObservationSummary> = dims
             .into_iter()
-            .map(|(dim, count)| ObservationSummary { dimension: dim, event_count: count })
+            .map(|(dim, count)| ObservationSummary {
+                dimension: dim,
+                event_count: count,
+            })
             .collect();
 
         let detections: Vec<DetectionSummary> = se
@@ -119,9 +136,23 @@ impl AuditStore for MemoryAuditStore {
             .map(|e| DetectionSummary {
                 turn: 0,
                 detector: e.event_type.clone(),
-                category: e.event_data.get("category").and_then(|v| v.as_str()).unwrap_or("unknown").into(),
-                severity: e.event_data.get("severity").and_then(|v| v.as_str()).unwrap_or("info").into(),
-                confidence: e.event_data.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                category: e
+                    .event_data
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .into(),
+                severity: e
+                    .event_data
+                    .get("severity")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("info")
+                    .into(),
+                confidence: e
+                    .event_data
+                    .get("confidence")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0),
             })
             .collect();
 
@@ -136,17 +167,24 @@ impl AuditStore for MemoryAuditStore {
             })
             .collect();
 
-        let cps = self.checkpoints.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let cps = self
+            .checkpoints
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         let checkpoints: Vec<CheckpointSummary> = cps
             .iter()
             .filter(|c| c.session_id.to_string() == session_id)
-            .map(|_| CheckpointSummary { turn: 0, reason: "saved".into() })
+            .map(|_| CheckpointSummary {
+                turn: 0,
+                reason: "saved".into(),
+            })
             .collect();
 
         let total_tokens: u64 = se
             .iter()
             .filter_map(|e| {
-                e.event_data.get("token_count")
+                e.event_data
+                    .get("token_count")
                     .or_else(|| e.event_data.get("total_tokens"))
                     .and_then(|v| v.as_u64())
             })
@@ -170,18 +208,27 @@ impl AuditStore for MemoryAuditStore {
     }
 
     async fn save_checkpoint(&self, cp: &Checkpoint) -> Result<(), ForgeError> {
-        let mut cps = self.checkpoints.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let mut cps = self
+            .checkpoints
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         cps.push(cp.clone());
         Ok(())
     }
 
     async fn load_checkpoint(&self, cid: &str) -> Result<Option<Checkpoint>, ForgeError> {
-        let cps = self.checkpoints.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let cps = self
+            .checkpoints
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         Ok(cps.iter().find(|c| c.id.to_string() == cid).cloned())
     }
 
     async fn replay_session(&self, session_id: &str) -> Result<Vec<AuditEvent>, ForgeError> {
-        let events = self.events.lock().map_err(|e| ForgeError::Audit(e.to_string()))?;
+        let events = self
+            .events
+            .lock()
+            .map_err(|e| ForgeError::Audit(e.to_string()))?;
         let mut se: Vec<AuditEvent> = events
             .iter()
             .filter(|e| e.session_id.to_string() == session_id)
@@ -199,11 +246,18 @@ mod tests {
 
     fn mk(sid: Uuid, seq: i64, phase: AuditPhase, et: &str) -> AuditEvent {
         AuditEvent {
-            id: 0, session_id: sid, agent_id: None, trace_id: Uuid::new_v4(),
-            sequence: seq, phase, event_type: et.into(),
+            id: 0,
+            session_id: sid,
+            agent_id: None,
+            trace_id: Uuid::new_v4(),
+            sequence: seq,
+            phase,
+            event_type: et.into(),
             event_data: serde_json::json!({"dimension":"token","token_count":100}),
-            parent_event: None, checkpoint_ref: None,
-            hash_chain: format!("h{}", seq), created_at: Utc::now(),
+            parent_event: None,
+            checkpoint_ref: None,
+            hash_chain: format!("h{}", seq),
+            created_at: Utc::now(),
         }
     }
 
@@ -211,9 +265,15 @@ mod tests {
     async fn test_append_and_query() {
         let s = MemoryAuditStore::new();
         let sid = Uuid::new_v4();
-        let id = s.append(&mk(sid, 1, AuditPhase::Observe, "t")).await.unwrap();
+        let id = s
+            .append(&mk(sid, 1, AuditPhase::Observe, "t"))
+            .await
+            .unwrap();
         assert!(id > 0);
-        let r = s.query(Some(&sid.to_string()), None, None, None).await.unwrap();
+        let r = s
+            .query(Some(&sid.to_string()), None, None, None)
+            .await
+            .unwrap();
         assert_eq!(r.len(), 1);
     }
 
@@ -221,8 +281,12 @@ mod tests {
     async fn test_search_finds_match() {
         let s = MemoryAuditStore::new();
         let sid = Uuid::new_v4();
-        s.append(&mk(sid, 1, AuditPhase::Detect, "loop_detected")).await.unwrap();
-        s.append(&mk(sid, 2, AuditPhase::Detect, "secret_leak")).await.unwrap();
+        s.append(&mk(sid, 1, AuditPhase::Detect, "loop_detected"))
+            .await
+            .unwrap();
+        s.append(&mk(sid, 2, AuditPhase::Detect, "secret_leak"))
+            .await
+            .unwrap();
         assert_eq!(s.search("loop").await.unwrap().len(), 1);
     }
 
@@ -230,9 +294,15 @@ mod tests {
     async fn test_get_report_aggregates() {
         let s = MemoryAuditStore::new();
         let sid = Uuid::new_v4();
-        s.append(&mk(sid, 1, AuditPhase::Observe, "t")).await.unwrap();
-        s.append(&mk(sid, 2, AuditPhase::Detect, "d")).await.unwrap();
-        s.append(&mk(sid, 3, AuditPhase::Action, "a")).await.unwrap();
+        s.append(&mk(sid, 1, AuditPhase::Observe, "t"))
+            .await
+            .unwrap();
+        s.append(&mk(sid, 2, AuditPhase::Detect, "d"))
+            .await
+            .unwrap();
+        s.append(&mk(sid, 3, AuditPhase::Action, "a"))
+            .await
+            .unwrap();
         let r = s.get_report(&sid.to_string()).await.unwrap();
         assert_eq!(r.observations.len(), 1);
         assert_eq!(r.detections.len(), 1);
@@ -244,11 +314,18 @@ mod tests {
         let s = MemoryAuditStore::new();
         let cid = Uuid::new_v4();
         let cp = Checkpoint {
-            id: cid, event_id: 1, session_id: Uuid::new_v4(),
-            agent_states: serde_json::json!({}), context_snapshot: None,
-            message_queue: None, state_store: None, graph_state: None,
-            task_progress: None, plan: None,
-            token_usage: serde_json::json!({"t": 500}), created_at: Utc::now(),
+            id: cid,
+            event_id: 1,
+            session_id: Uuid::new_v4(),
+            agent_states: serde_json::json!({}),
+            context_snapshot: None,
+            message_queue: None,
+            state_store: None,
+            graph_state: None,
+            task_progress: None,
+            plan: None,
+            token_usage: serde_json::json!({"t": 500}),
+            created_at: Utc::now(),
         };
         s.save_checkpoint(&cp).await.unwrap();
         assert!(s.load_checkpoint(&cid.to_string()).await.unwrap().is_some());
@@ -259,7 +336,9 @@ mod tests {
         let s = MemoryAuditStore::new();
         let sid = Uuid::new_v4();
         for i in 1..=5 {
-            s.append(&mk(sid, i, AuditPhase::Observe, &format!("e{}", i))).await.unwrap();
+            s.append(&mk(sid, i, AuditPhase::Observe, &format!("e{}", i)))
+                .await
+                .unwrap();
         }
         let replay = s.replay_session(&sid.to_string()).await.unwrap();
         assert_eq!(replay.len(), 5);
@@ -271,8 +350,16 @@ mod tests {
         let s = MemoryAuditStore::new();
         let sid = Uuid::new_v4();
         for i in 1..=10 {
-            s.append(&mk(sid, i, AuditPhase::Observe, "x")).await.unwrap();
+            s.append(&mk(sid, i, AuditPhase::Observe, "x"))
+                .await
+                .unwrap();
         }
-        assert_eq!(s.query(Some(&sid.to_string()), None, Some(3), Some(5)).await.unwrap().len(), 3);
+        assert_eq!(
+            s.query(Some(&sid.to_string()), None, Some(3), Some(5))
+                .await
+                .unwrap()
+                .len(),
+            3
+        );
     }
 }

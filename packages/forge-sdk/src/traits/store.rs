@@ -1,8 +1,8 @@
 // forge-sdk/src/traits/store.rs — AuditStore trait
 
-use async_trait::async_trait;
 use crate::error::ForgeError;
 use crate::types::audit::{AuditEvent, AuditReport, Checkpoint};
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait AuditStore: Send + Sync {

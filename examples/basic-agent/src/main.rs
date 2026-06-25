@@ -7,9 +7,9 @@
 //!
 //! Run with: cargo run -p forge-example-basic-agent
 
+use forge_harness::runner;
 use forge_sdk::agent::{AgentType, MockAgent};
 use forge_sdk::presets::Preset;
-use forge_harness::runner;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     // In production, you'd implement AgentAdapter for your real agent
     // (Claude API, LangGraph, CrewAI, etc.)
     let mut agent = MockAgent::new("example-agent", AgentType::Solo)
-        .with_turns(4)     // Simulate 4 thinking/tool turns
+        .with_turns(4) // Simulate 4 thinking/tool turns
         .with_success(true);
 
     let task = "Write a function to validate email addresses";
@@ -36,16 +36,20 @@ async fn main() -> anyhow::Result<()> {
     let result = runner::run_harness_session(
         &mut agent,
         task,
-        Preset::Solo,  // Full observer/detector/strategy suite for solo agents
-        None,          // No audit store (use Some(store) for persistence)
-    ).await?;
+        Preset::Solo, // Full observer/detector/strategy suite for solo agents
+        None,         // No audit store (use Some(store) for persistence)
+    )
+    .await?;
 
     // ── 3. Display results ──────────────────────────────────────────
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║                    SESSION RESULTS                            ║");
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║ Agent ID:       {:<44} ║", result.agent_id);
-    println!("║ Success:        {:<44} ║", if result.success { "✅ YES" } else { "❌ NO" });
+    println!(
+        "║ Success:        {:<44} ║",
+        if result.success { "✅ YES" } else { "❌ NO" }
+    );
     println!("║ Observation cycles: {:<40} ║", result.observation_count);
     println!("║ Detections:     {:<44} ║", result.detection_count);
     println!("║ Interventions:  {:<44} ║", result.intervention_count);

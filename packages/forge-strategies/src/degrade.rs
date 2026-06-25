@@ -8,12 +8,22 @@ pub struct DegradeStrategy;
 
 #[async_trait]
 impl Strategy for DegradeStrategy {
-    fn name(&self) -> &'static str { "degrade" }
-    fn priority(&self) -> u32 { 15 }
+    fn name(&self) -> &'static str {
+        "degrade"
+    }
+    fn priority(&self) -> u32 {
+        15
+    }
     async fn evaluate(&self, detection: &DetectedIssue) -> Option<StrategyResult> {
-        let intervention = Intervention::Degrade { level: DegradeLevel::Mild };
-        Some(StrategyResult { strategy_name: "degrade".into(), intervention, priority: self.priority(),
+        let intervention = Intervention::Degrade {
+            level: DegradeLevel::Mild,
+        };
+        Some(StrategyResult {
+            strategy_name: "degrade".into(),
+            intervention,
+            priority: self.priority(),
             reasoning: format!("Degrading to reduce cost: {}", detection.description),
-            confidence: detection.confidence })
+            confidence: detection.confidence,
+        })
     }
 }

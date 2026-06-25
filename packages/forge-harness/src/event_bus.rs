@@ -1,8 +1,8 @@
 // forge-harness/src/event_bus.rs — mpsc-based event bus
 
+use forge_sdk::events::AgentEvent;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use forge_sdk::events::AgentEvent;
 
 /// The event bus fans out agent events to all registered observers.
 /// It also provides an interceptor for injecting interventions back.

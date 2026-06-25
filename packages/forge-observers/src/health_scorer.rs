@@ -28,17 +28,28 @@ pub struct HealthWeights {
 impl Default for HealthWeights {
     fn default() -> Self {
         Self {
-            token: 0.12, latency: 0.08, cost: 0.10, accuracy: 0.12,
-            orchestration: 0.08, communication: 0.06, security: 0.12,
-            reliability: 0.08, context_quality: 0.08, memory: 0.04,
-            compliance: 0.08, diversity: 0.04,
+            token: 0.12,
+            latency: 0.08,
+            cost: 0.10,
+            accuracy: 0.12,
+            orchestration: 0.08,
+            communication: 0.06,
+            security: 0.12,
+            reliability: 0.08,
+            context_quality: 0.08,
+            memory: 0.04,
+            compliance: 0.08,
+            diversity: 0.04,
         }
     }
 }
 
 impl HealthScorer {
     pub fn new(weights: HealthWeights) -> Self {
-        Self { weights, previous_score: None }
+        Self {
+            weights,
+            previous_score: None,
+        }
     }
 
     /// Compute health score from dimension scores.
@@ -79,7 +90,11 @@ impl HealthScorer {
             weight_sum += self.weights.diversity;
         }
 
-        let overall = if weight_sum > 0.0 { total / weight_sum } else { 1.0 };
+        let overall = if weight_sum > 0.0 {
+            total / weight_sum
+        } else {
+            1.0
+        };
 
         let trend = match self.previous_score {
             None => HealthTrend::Stable,

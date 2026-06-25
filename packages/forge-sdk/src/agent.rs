@@ -197,7 +197,12 @@ pub struct MockAgent {
 
 impl MockAgent {
     pub fn new(id: impl Into<String>, agent_type: AgentType) -> Self {
-        Self { id: id.into(), agent_type, turn_count: 3, succeed: true }
+        Self {
+            id: id.into(),
+            agent_type,
+            turn_count: 3,
+            succeed: true,
+        }
     }
 
     pub fn with_turns(mut self, turns: u32) -> Self {
@@ -213,8 +218,12 @@ impl MockAgent {
 
 #[async_trait]
 impl AgentAdapter for MockAgent {
-    fn id(&self) -> String { self.id.clone() }
-    fn agent_type(&self) -> AgentType { self.agent_type }
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+    fn agent_type(&self) -> AgentType {
+        self.agent_type
+    }
 
     async fn run(
         &mut self,
@@ -226,50 +235,62 @@ impl AgentAdapter for MockAgent {
         let now = Utc::now();
 
         // Emit started
-        let _ = event_tx.send(AgentEvent::Started {
-            agent_id: self.id.clone(),
-            task: task.to_string(),
-            timestamp: now,
-        }).await;
+        let _ = event_tx
+            .send(AgentEvent::Started {
+                agent_id: self.id.clone(),
+                task: task.to_string(),
+                timestamp: now,
+            })
+            .await;
 
         // Simulate N turns of "think + tool use"
         for turn in 0..self.turn_count {
-            let _ = event_tx.send(AgentEvent::ThinkingStart {
-                agent_id: self.id.clone(),
-                timestamp: Utc::now(),
-            }).await;
+            let _ = event_tx
+                .send(AgentEvent::ThinkingStart {
+                    agent_id: self.id.clone(),
+                    timestamp: Utc::now(),
+                })
+                .await;
 
-            let _ = event_tx.send(AgentEvent::ToolCallStart {
-                agent_id: self.id.clone(),
-                tool: "mock_search".into(),
-                args: serde_json::json!({"query": format!("turn_{}", turn)}),
-                timestamp: Utc::now(),
-            }).await;
+            let _ = event_tx
+                .send(AgentEvent::ToolCallStart {
+                    agent_id: self.id.clone(),
+                    tool: "mock_search".into(),
+                    args: serde_json::json!({"query": format!("turn_{}", turn)}),
+                    timestamp: Utc::now(),
+                })
+                .await;
 
-            let _ = event_tx.send(AgentEvent::ToolCallEnd {
-                agent_id: self.id.clone(),
-                tool: "mock_search".into(),
-                result: ToolResult {
-                    content: format!("result_turn_{}", turn),
-                    is_error: false,
-                    duration_ms: 50,
-                    token_count: 100,
-                },
-                timestamp: Utc::now(),
-            }).await;
+            let _ = event_tx
+                .send(AgentEvent::ToolCallEnd {
+                    agent_id: self.id.clone(),
+                    tool: "mock_search".into(),
+                    result: ToolResult {
+                        content: format!("result_turn_{}", turn),
+                        is_error: false,
+                        duration_ms: 50,
+                        token_count: 100,
+                    },
+                    timestamp: Utc::now(),
+                })
+                .await;
 
-            let _ = event_tx.send(AgentEvent::ThinkingEnd {
-                agent_id: self.id.clone(),
-                timestamp: Utc::now(),
-            }).await;
+            let _ = event_tx
+                .send(AgentEvent::ThinkingEnd {
+                    agent_id: self.id.clone(),
+                    timestamp: Utc::now(),
+                })
+                .await;
         }
 
         // Emit completed
-        let _ = event_tx.send(AgentEvent::Completed {
-            agent_id: self.id.clone(),
-            summary: format!("Mock agent completed task: {}", task),
-            timestamp: Utc::now(),
-        }).await;
+        let _ = event_tx
+            .send(AgentEvent::Completed {
+                agent_id: self.id.clone(),
+                summary: format!("Mock agent completed task: {}", task),
+                timestamp: Utc::now(),
+            })
+            .await;
 
         Ok(AgentOutcome {
             success: self.succeed,

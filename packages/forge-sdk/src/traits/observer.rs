@@ -1,7 +1,7 @@
 // forge-sdk/src/traits/observer.rs — Observer trait
 
-use async_trait::async_trait;
 use crate::events::AgentEvent;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait Observer: Send + Sync {

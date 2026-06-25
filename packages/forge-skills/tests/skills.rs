@@ -1,5 +1,5 @@
-use forge_skills::registry::SkillRegistry;
 use forge_skills::composer::SkillComposer;
+use forge_skills::registry::SkillRegistry;
 use forge_skills::sdk::SkillSdk;
 
 #[test]

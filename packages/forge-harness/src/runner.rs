@@ -3,13 +3,13 @@
 // THE entry point. Ties Harness + Agent + Pipeline + Runtime together.
 // CLI and server both call `run_harness_session()`.
 
-use std::sync::Arc;
 use async_trait::async_trait;
 use forge_sdk::agent::AgentAdapter;
 use forge_sdk::error::ForgeError;
-use forge_sdk::harness::{Harness, HarnessConfig, HarnessRuntime, HarnessRunResult};
+use forge_sdk::harness::{Harness, HarnessConfig, HarnessRunResult, HarnessRuntime};
 use forge_sdk::presets::Preset;
 use forge_sdk::traits::store::AuditStore;
+use std::sync::Arc;
 
 use crate::factory::build_registry_from_preset;
 use crate::pipeline::Pipeline;
@@ -65,7 +65,10 @@ pub async fn dry_run(
     task: &str,
     preset: Preset,
 ) -> Result<HarnessRunResult, ForgeError> {
-    let config = HarnessConfig { dry_run: true, ..Default::default() };
+    let config = HarnessConfig {
+        dry_run: true,
+        ..Default::default()
+    };
     let registry = build_registry_from_preset(&preset);
     run_with_registry(agent, task, registry, config, None).await
 }

@@ -1,7 +1,7 @@
 use forge_cloud::aws::AwsIntegration;
 use forge_cloud::azure::AzureIntegration;
-use forge_cloud::gcp::GcpIntegration;
 use forge_cloud::deploy::{CloudDeploy, CloudProvider};
+use forge_cloud::gcp::GcpIntegration;
 
 #[test]
 fn test_aws_region() {

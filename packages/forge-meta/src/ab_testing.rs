@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Default)]
-pub struct ABTestEngine { tests: Vec<ABTest> }
+pub struct ABTestEngine {
+    tests: Vec<ABTest>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABTest {
@@ -18,10 +20,16 @@ pub struct ABTest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ABWinner { Control, Treatment, Tie }
+pub enum ABWinner {
+    Control,
+    Treatment,
+    Tie,
+}
 
 impl ABTestEngine {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn run(
         &mut self,
@@ -34,11 +42,16 @@ impl ABTestEngine {
         let p_value = if sample_size > 10 {
             let se = ((control_metrics.pass_rate * (1.0 - control_metrics.pass_rate)
                 + treatment_metrics.pass_rate * (1.0 - treatment_metrics.pass_rate))
-                / sample_size as f64).sqrt();
+                / sample_size as f64)
+                .sqrt();
             if se > 0.0 {
                 (1.0 - normal_cdf(pass_delta.abs() / se)) * 2.0
-            } else { 1.0 }
-        } else { 0.5 };
+            } else {
+                1.0
+            }
+        } else {
+            0.5
+        };
 
         let winner = if p_value < 0.05 && pass_delta > 0.03 {
             Some(ABWinner::Treatment)

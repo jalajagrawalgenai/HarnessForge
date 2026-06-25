@@ -35,7 +35,8 @@ impl NudgeStrategy {
             }
             forge_sdk::types::detection::IssueCategory::AccuracyRisk { .. } => {
                 "Note: You've generated code but haven't run the tests yet. \
-                 Run the tests before proceeding to the next step.".to_string()
+                 Run the tests before proceeding to the next step."
+                    .to_string()
             }
             _ => {
                 format!(
@@ -49,8 +50,12 @@ impl NudgeStrategy {
 
 #[async_trait]
 impl Strategy for NudgeStrategy {
-    fn name(&self) -> &'static str { "nudge" }
-    fn priority(&self) -> u32 { 10 } // Low priority — try gentle fix first
+    fn name(&self) -> &'static str {
+        "nudge"
+    }
+    fn priority(&self) -> u32 {
+        10
+    } // Low priority — try gentle fix first
 
     async fn evaluate(&self, detection: &DetectedIssue) -> Option<StrategyResult> {
         let message = Self::craft_nudge(detection);

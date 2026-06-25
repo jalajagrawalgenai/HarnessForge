@@ -1,10 +1,10 @@
+use forge_detectors::cost_anomaly::CostAnomalyDetector;
+use forge_detectors::deadlock::DeadlockDetector;
+use forge_detectors::hallucination::HallucinationDetector;
 use forge_detectors::loop_detector::LoopDetector;
+use forge_detectors::prompt_injection::PromptInjectionDetector;
 use forge_detectors::secret_leak::SecretLeakDetector;
 use forge_detectors::stale_context::StaleContextDetector;
-use forge_detectors::cost_anomaly::CostAnomalyDetector;
-use forge_detectors::prompt_injection::PromptInjectionDetector;
-use forge_detectors::hallucination::HallucinationDetector;
-use forge_detectors::deadlock::DeadlockDetector;
 use forge_detectors::variety_collapse::VarietyCollapseDetector;
 use forge_sdk::traits::detector::Detector;
 use serde_json::json;
@@ -20,7 +20,10 @@ async fn test_loop_detector_fires() {
     let issues = detector.detect("agent-1", &obs).await;
     assert!(!issues.is_empty());
     let issue = &issues[0];
-    assert_eq!(issue.severity, forge_sdk::types::detection::Severity::Warning);
+    assert_eq!(
+        issue.severity,
+        forge_sdk::types::detection::Severity::Warning
+    );
     assert!(issue.confidence > 0.5);
 }
 
@@ -28,7 +31,9 @@ async fn test_loop_detector_fires() {
 async fn test_loop_detector_no_false_positive() {
     let detector = LoopDetector::new(5, 10);
     let obs = vec![
-        json!({"tool_name": "read"}), json!({"tool_name": "write"}), json!({"tool_name": "grep"}),
+        json!({"tool_name": "read"}),
+        json!({"tool_name": "write"}),
+        json!({"tool_name": "grep"}),
     ];
     let issues = detector.detect("agent-1", &obs).await;
     assert!(issues.is_empty());
@@ -40,7 +45,10 @@ async fn test_secret_leak_detector() {
     let obs = vec![json!({"content": "Here is my API key: sk-ant-abc123"})];
     let issues = detector.detect("agent-1", &obs).await;
     assert!(!issues.is_empty());
-    assert_eq!(issues[0].severity, forge_sdk::types::detection::Severity::Critical);
+    assert_eq!(
+        issues[0].severity,
+        forge_sdk::types::detection::Severity::Critical
+    );
 }
 
 #[tokio::test]
@@ -55,7 +63,8 @@ async fn test_secret_leak_no_false_positive() {
 async fn test_stale_context_detector() {
     let detector = StaleContextDetector::new(2, 0.8);
     let obs = vec![
-        json!({"file_path": "auth.rs"}), json!({"file_path": "auth.rs"}),
+        json!({"file_path": "auth.rs"}),
+        json!({"file_path": "auth.rs"}),
     ];
     let issues = detector.detect("agent-1", &obs).await;
     assert!(!issues.is_empty());
@@ -73,9 +82,12 @@ async fn test_stale_context_pressure() {
 async fn test_cost_anomaly_detector() {
     let detector = CostAnomalyDetector::new(3.0);
     let obs = vec![
-        json!({"cost_per_turn": 0.01}), json!({"cost_per_turn": 0.01}),
-        json!({"cost_per_turn": 0.01}), json!({"cost_per_turn": 0.01}),
-        json!({"cost_per_turn": 0.01}), json!({"cost_per_turn": 0.50}),
+        json!({"cost_per_turn": 0.01}),
+        json!({"cost_per_turn": 0.01}),
+        json!({"cost_per_turn": 0.01}),
+        json!({"cost_per_turn": 0.01}),
+        json!({"cost_per_turn": 0.01}),
+        json!({"cost_per_turn": 0.50}),
     ];
     let issues = detector.detect("agent-1", &obs).await;
     assert!(!issues.is_empty());
@@ -122,26 +134,33 @@ async fn test_variety_collapse_detector() {
     let detector = VarietyCollapseDetector::new(0.5);
     let content = "I will implement this using the same approach as everyone else.";
     let obs = vec![
-        json!({"agent_output": content}), json!({"agent_output": content}), json!({"agent_output": content}),
+        json!({"agent_output": content}),
+        json!({"agent_output": content}),
+        json!({"agent_output": content}),
     ];
     let issues = detector.detect("agent-1", &obs).await;
     assert!(!issues.is_empty());
 }
 
 // ─── New detectors ───
+use forge_detectors::accuracy_risk::AccuracyRiskDetector;
+use forge_detectors::compliance_gap::ComplianceGapDetector;
 use forge_detectors::conversation_stall::ConversationStallDetector;
 use forge_detectors::goal_drift::GoalDriftDetector;
 use forge_detectors::model_mismatch::ModelMismatchDetector;
-use forge_detectors::accuracy_risk::AccuracyRiskDetector;
-use forge_detectors::runaway_cost::RunawayCostDetector;
-use forge_detectors::resource_exhaustion::ResourceExhaustionDetector;
 use forge_detectors::output_degradation::OutputDegradationDetector;
-use forge_detectors::compliance_gap::ComplianceGapDetector;
+use forge_detectors::resource_exhaustion::ResourceExhaustionDetector;
+use forge_detectors::runaway_cost::RunawayCostDetector;
 
 #[tokio::test]
 async fn test_conversation_stall() {
     let detector = ConversationStallDetector::new(30);
-    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() * 1000 - 60000;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        * 1000
+        - 60000;
     let obs = vec![json!({"msg_timestamp_ms": ts})];
     let issues = detector.detect("a", &obs).await;
     assert!(!issues.is_empty());
@@ -150,7 +169,10 @@ async fn test_conversation_stall() {
 #[tokio::test]
 async fn test_goal_drift() {
     let detector = GoalDriftDetector::new(0.5);
-    let obs = vec![json!({"original_task":"Implement JWT"}), json!({"current_output":"The weather is nice"})];
+    let obs = vec![
+        json!({"original_task":"Implement JWT"}),
+        json!({"current_output":"The weather is nice"}),
+    ];
     let issues = detector.detect("a", &obs).await;
     assert!(!issues.is_empty());
 }
@@ -179,7 +201,14 @@ async fn test_accuracy_risk() {
 #[tokio::test]
 async fn test_runaway_cost() {
     let detector = RunawayCostDetector::new(0.01);
-    let obs = vec![json!({"cost_per_turn":0.01}),json!({"cost_per_turn":0.02}),json!({"cost_per_turn":0.04}),json!({"cost_per_turn":0.08}),json!({"cost_per_turn":0.16}),json!({"cost_per_turn":0.32})];
+    let obs = vec![
+        json!({"cost_per_turn":0.01}),
+        json!({"cost_per_turn":0.02}),
+        json!({"cost_per_turn":0.04}),
+        json!({"cost_per_turn":0.08}),
+        json!({"cost_per_turn":0.16}),
+        json!({"cost_per_turn":0.32}),
+    ];
     assert!(!detector.detect("a", &obs).await.is_empty());
 }
 
@@ -193,7 +222,12 @@ async fn test_resource_exhaustion() {
 #[tokio::test]
 async fn test_output_degradation() {
     let detector = OutputDegradationDetector::new(0.05);
-    let obs = vec![json!({"quality_score":0.9}),json!({"quality_score":0.8}),json!({"quality_score":0.6}),json!({"quality_score":0.3})];
+    let obs = vec![
+        json!({"quality_score":0.9}),
+        json!({"quality_score":0.8}),
+        json!({"quality_score":0.6}),
+        json!({"quality_score":0.3}),
+    ];
     assert!(!detector.detect("a", &obs).await.is_empty());
 }
 
@@ -203,5 +237,8 @@ async fn test_compliance_gap() {
     let obs = vec![json!({"compliance_gap":"human_gate_skipped"})];
     let issues = detector.detect("a", &obs).await;
     assert!(!issues.is_empty());
-    assert_eq!(issues[0].severity, forge_sdk::types::detection::Severity::Critical);
+    assert_eq!(
+        issues[0].severity,
+        forge_sdk::types::detection::Severity::Critical
+    );
 }
