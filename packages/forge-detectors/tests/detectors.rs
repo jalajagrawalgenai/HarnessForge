@@ -127,3 +127,81 @@ async fn test_variety_collapse_detector() {
     let issues = detector.detect("agent-1", &obs).await;
     assert!(!issues.is_empty());
 }
+
+// ─── New detectors ───
+use forge_detectors::conversation_stall::ConversationStallDetector;
+use forge_detectors::goal_drift::GoalDriftDetector;
+use forge_detectors::model_mismatch::ModelMismatchDetector;
+use forge_detectors::accuracy_risk::AccuracyRiskDetector;
+use forge_detectors::runaway_cost::RunawayCostDetector;
+use forge_detectors::resource_exhaustion::ResourceExhaustionDetector;
+use forge_detectors::output_degradation::OutputDegradationDetector;
+use forge_detectors::compliance_gap::ComplianceGapDetector;
+
+#[tokio::test]
+async fn test_conversation_stall() {
+    let detector = ConversationStallDetector::new(30);
+    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() * 1000 - 60000;
+    let obs = vec![json!({"msg_timestamp_ms": ts})];
+    let issues = detector.detect("a", &obs).await;
+    assert!(!issues.is_empty());
+}
+
+#[tokio::test]
+async fn test_goal_drift() {
+    let detector = GoalDriftDetector::new(0.5);
+    let obs = vec![json!({"original_task":"Implement JWT"}), json!({"current_output":"The weather is nice"})];
+    let issues = detector.detect("a", &obs).await;
+    assert!(!issues.is_empty());
+}
+
+#[tokio::test]
+async fn test_model_mismatch() {
+    let detector = ModelMismatchDetector;
+    let obs = vec![json!({"task":"Refactor architecture","model":"claude-haiku-4-5"})];
+    assert!(!detector.detect("a", &obs).await.is_empty());
+}
+
+#[tokio::test]
+async fn test_model_mismatch_ok() {
+    let detector = ModelMismatchDetector;
+    let obs = vec![json!({"task":"Fix typo","model":"claude-haiku-4-5"})];
+    assert!(detector.detect("a", &obs).await.is_empty());
+}
+
+#[tokio::test]
+async fn test_accuracy_risk() {
+    let detector = AccuracyRiskDetector;
+    let obs = vec![json!({"tool":"write","content":"fn main(){}"})];
+    assert!(!detector.detect("a", &obs).await.is_empty());
+}
+
+#[tokio::test]
+async fn test_runaway_cost() {
+    let detector = RunawayCostDetector::new(0.01);
+    let obs = vec![json!({"cost_per_turn":0.01}),json!({"cost_per_turn":0.02}),json!({"cost_per_turn":0.04}),json!({"cost_per_turn":0.08}),json!({"cost_per_turn":0.16}),json!({"cost_per_turn":0.32})];
+    assert!(!detector.detect("a", &obs).await.is_empty());
+}
+
+#[tokio::test]
+async fn test_resource_exhaustion() {
+    let detector = ResourceExhaustionDetector::new(0.7, 0.8);
+    let obs = vec![json!({"resource":"disk","usage_pct":0.92})];
+    assert!(!detector.detect("a", &obs).await.is_empty());
+}
+
+#[tokio::test]
+async fn test_output_degradation() {
+    let detector = OutputDegradationDetector::new(0.05);
+    let obs = vec![json!({"quality_score":0.9}),json!({"quality_score":0.8}),json!({"quality_score":0.6}),json!({"quality_score":0.3})];
+    assert!(!detector.detect("a", &obs).await.is_empty());
+}
+
+#[tokio::test]
+async fn test_compliance_gap() {
+    let detector = ComplianceGapDetector;
+    let obs = vec![json!({"compliance_gap":"human_gate_skipped"})];
+    let issues = detector.detect("a", &obs).await;
+    assert!(!issues.is_empty());
+    assert_eq!(issues[0].severity, forge_sdk::types::detection::Severity::Critical);
+}

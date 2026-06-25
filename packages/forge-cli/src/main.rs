@@ -29,6 +29,25 @@ enum Commands {
     Doctor,
     /// Run agent against test suite
     Test { #[arg(long)] tasks: Option<String> },
+    /// Validate harness config
+    Validate { #[arg(long)] config: Option<String> },
+    /// Compare two sessions or harness versions
+    Diff { a: String, b: String, #[arg(long)] harness: bool },
+    /// View or edit forge.toml
+    Config { #[arg(long)] key: Option<String>, #[arg(long)] value: Option<String> },
+    /// Manage community plugins
+    Plugin { #[command(subcommand)] action: Option<PluginAction> },
+    /// Export session data
+    Export { session_id: String, #[arg(long, default_value = "json")] format: String },
+    /// Generate shell completions
+    Completion { shell: String },
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    Search { query: String },
+    Install { name: String },
+    List,
 }
 
 fn main() {
@@ -64,6 +83,31 @@ fn main() {
         }
         Commands::Test { tasks } => {
             println!("forge: Running tests: {}", tasks.unwrap_or_else(|| "all".into()));
+        }
+        Commands::Validate { config } => {
+            println!("forge: Validating config: {}", config.unwrap_or_else(|| "forge.toml".into()));
+        }
+        Commands::Diff { a, b, harness } => {
+            if harness { println!("forge: Diffing harness {} vs {}", a, b); }
+            else { println!("forge: Diffing session {} vs {}", a, b); }
+        }
+        Commands::Config { key, value } => {
+            match (key, value) {
+                (Some(k), Some(v)) => println!("forge: Setting {} = {}", k, v),
+                (Some(k), None) => println!("forge: Getting {}", k),
+                (None, _) => println!("forge: Listing all config"),
+            }
+        }
+        Commands::Plugin { action } => match action {
+            Some(PluginAction::Search { query }) => println!("forge: Searching plugins for '{}'", query),
+            Some(PluginAction::Install { name }) => println!("forge: Installing plugin '{}'", name),
+            Some(PluginAction::List) | None => println!("forge: Installed plugins: (none)"),
+        },
+        Commands::Export { session_id, format } => {
+            println!("forge: Exporting session {} as {}", session_id, format);
+        }
+        Commands::Completion { shell } => {
+            println!("forge: Generating completions for {}", shell);
         }
     }
 }
