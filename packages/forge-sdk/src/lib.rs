@@ -12,5 +12,7 @@ pub mod types;
 // Re-exports for convenient access
 pub use agent::AgentAdapter;
 pub use agent::AgentType;
-pub use harness::{Harness, HarnessBuilder, HarnessConfig};
+pub use agent::BridgeMethod;
+pub use agent::MockAgent;
+pub use harness::{Harness, HarnessBuilder, HarnessConfig, HarnessRuntime, HarnessRunResult};
 pub use prelude::*;

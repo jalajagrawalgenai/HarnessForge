@@ -1,7 +1,6 @@
 // forge-sdk/src/traits/strategy.rs — Strategy trait
 
 use async_trait::async_trait;
-use crate::events::Intervention;
 use crate::types::detection::DetectedIssue;
 use crate::types::strategy::StrategyResult;
 

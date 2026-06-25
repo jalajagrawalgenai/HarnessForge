@@ -6,13 +6,15 @@ pub struct ImprovementNotification {
     pub edits_applied: usize, pub timestamp: chrono::DateTime<Utc>,
 }
 
+#[async_trait::async_trait]
 pub trait Notifier: Send + Sync {
-    fn notify(&self, notification: &ImprovementNotification);
+    async fn notify(&self, notification: &ImprovementNotification);
 }
 
 pub struct CliNotifier;
+#[async_trait::async_trait]
 impl Notifier for CliNotifier {
-    fn notify(&self, n: &ImprovementNotification) {
+    async fn notify(&self, n: &ImprovementNotification) {
         println!("🚀 Harness {} deployed! +{:.0}% pass rate (p={:.4}). {} edits applied.", n.version, n.improvement_pct, n.p_value, n.edits_applied);
     }
 }
@@ -21,11 +23,12 @@ pub struct WebhookNotifier { url: String }
 impl WebhookNotifier {
     pub fn new(url: &str) -> Self { Self { url: url.into() } }
 }
+#[async_trait::async_trait]
 impl Notifier for WebhookNotifier {
-    fn notify(&self, n: &ImprovementNotification) {
+    async fn notify(&self, n: &ImprovementNotification) {
         let payload = serde_json::json!({
             "text": format!("🚀 Harness {} deployed! +{:.0}% pass rate (p={:.4}). {} edits applied.", n.version, n.improvement_pct, n.p_value, n.edits_applied)
         });
-        let _ = reqwest::blocking::Client::new().post(&self.url).json(&payload).send();
+        let _ = reqwest::Client::new().post(&self.url).json(&payload).send().await;
     }
 }

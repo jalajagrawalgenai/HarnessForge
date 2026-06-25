@@ -10,7 +10,11 @@ forge-sdk = { path = "../forge-sdk" }
 forge-harness = { path = "../forge-harness" }
 forge-audit = { path = "../forge-audit" }
 tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 clap = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 tracing = { workspace = true }

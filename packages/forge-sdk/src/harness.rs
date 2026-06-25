@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use async_trait::async_trait;
 
 use crate::agent::AgentAdapter;
 use crate::error::ForgeError;
@@ -28,6 +28,8 @@ impl Default for HarnessConfig {
         }
     }
 }
+
+// ─── HarnessBuilder ───────────────────────────────────────────────────
 
 pub struct HarnessBuilder {
     config: HarnessConfig,
@@ -63,8 +65,18 @@ impl HarnessBuilder {
         self
     }
 
+    pub fn session_id(mut self, id: impl Into<String>) -> Self {
+        self.config.session_id = Some(id.into());
+        self
+    }
+
     pub fn observe(mut self, observers: Vec<Arc<dyn Observer>>) -> Self {
         self.observers = observers;
+        self
+    }
+
+    pub fn add_observer(mut self, observer: Arc<dyn Observer>) -> Self {
+        self.observers.push(observer);
         self
     }
 
@@ -73,8 +85,18 @@ impl HarnessBuilder {
         self
     }
 
+    pub fn add_detector(mut self, detector: Arc<dyn Detector>) -> Self {
+        self.detectors.push(detector);
+        self
+    }
+
     pub fn strategize(mut self, strategies: Vec<Arc<dyn Strategy>>) -> Self {
         self.strategies = strategies;
+        self
+    }
+
+    pub fn add_strategy(mut self, strategy: Arc<dyn Strategy>) -> Self {
+        self.strategies.push(strategy);
         self
     }
 
@@ -100,6 +122,8 @@ impl Default for HarnessBuilder {
     }
 }
 
+// ─── Harness ──────────────────────────────────────────────────────────
+
 pub struct Harness {
     pub config: HarnessConfig,
     pub observers: Vec<Arc<dyn Observer>>,
@@ -113,15 +137,59 @@ impl Harness {
         HarnessBuilder::new()
     }
 
+    /// Run the harness against an agent.
+    ///
+    /// This default implementation runs the agent through the channels
+    /// and returns a basic result. For the full observe→detect→strategy
+    /// →action→audit pipeline, use:
+    /// - `Harness::run_with()` with a `HarnessRuntime` implementation
+    /// - `forge_harness::runner::run_harness_session()` directly
     pub async fn run(
         &self,
-        _agent: &mut dyn AgentAdapter,
-        _task: &str,
+        agent: &mut dyn AgentAdapter,
+        task: &str,
     ) -> Result<HarnessRunResult, ForgeError> {
-        // Full implementation in forge-harness runtime
-        Ok(HarnessRunResult::default())
+        let agent_id = agent.id();
+        let (event_tx, _event_rx) = tokio::sync::mpsc::channel::<crate::events::AgentEvent>(256);
+        let (_intervention_tx, intervention_rx) = tokio::sync::mpsc::channel::<crate::events::Intervention>(64);
+
+        let outcome = agent.run(task, event_tx, intervention_rx).await?;
+
+        Ok(HarnessRunResult {
+            agent_id,
+            observation_count: self.observers.len() as u64,
+            detection_count: self.detectors.len() as u64,
+            intervention_count: self.strategies.len() as u64,
+            success: outcome.success,
+        })
     }
 }
+
+// ─── HarnessRuntime trait ─────────────────────────────────────────────
+
+#[async_trait]
+pub trait HarnessRuntime: Send + Sync {
+    /// Execute a full harness session: spawn agent, run pipeline, return result.
+    async fn execute(
+        &self,
+        harness: &Harness,
+        agent: &mut (dyn AgentAdapter + Send),
+        task: &str,
+    ) -> Result<HarnessRunResult, ForgeError>;
+}
+
+impl Harness {
+    pub async fn run_with(
+        &self,
+        runtime: &dyn HarnessRuntime,
+        agent: &mut (dyn AgentAdapter + Send),
+        task: &str,
+    ) -> Result<HarnessRunResult, ForgeError> {
+        runtime.execute(self, agent, task).await
+    }
+}
+
+// ─── HarnessRunResult ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Default)]
 pub struct HarnessRunResult {

@@ -16,5 +16,6 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
+reqwest = { workspace = true }
 rand = "0.8"
 libm = "0.2"

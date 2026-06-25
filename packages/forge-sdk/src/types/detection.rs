@@ -111,14 +111,3 @@ impl DetectedIssue {
     }
 }
 
-impl PartialOrd for Severity {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for Severity {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let v = |s: &Severity| match s { Severity::Info=>0, Severity::Warning=>1, Severity::Error=>2, Severity::Critical=>3 };
-        v(self).cmp(&v(other))
-    }
-}

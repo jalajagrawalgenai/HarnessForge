@@ -15,6 +15,7 @@ members = [
     "packages/forge-meta",
     "packages/forge-server",
     "packages/forge-integrations",
+    "examples/basic-agent",
 ]
 
 [workspace.package]

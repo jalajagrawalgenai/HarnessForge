@@ -7,6 +7,9 @@ description = "Forge Harness — the observe→detect→strategy→action→audi
 
 [dependencies]
 forge-sdk = { path = "../forge-sdk" }
+forge-observers = { path = "../forge-observers" }
+forge-detectors = { path = "../forge-detectors" }
+forge-strategies = { path = "../forge-strategies" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,0 +1,11 @@
+[package]
+name = "forge-example-basic-agent"
+version = "0.1.0"
+edition = "2021"
+description = "Forge harness example — wrap an agent with observation, detection, and intervention"
+
+[dependencies]
+forge-sdk = { path = "../../packages/forge-sdk" }
+forge-harness = { path = "../../packages/forge-harness" }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"

@@ -88,6 +88,77 @@ async fn test_diversify_ignores_other_categories() {
 }
 
 #[tokio::test]
+async fn test_replace_strategy() {
+    let strategy = ReplaceStrategy;
+    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "read".into(), call_count: 10, no_progress_turns: 10 }, Severity::Error);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_degrade_strategy() {
+    let strategy = DegradeStrategy;
+    let issue = make_issue(IssueCategory::CostAnomaly { expected_cost: 1.0, actual_cost: 5.0, multiplier: 5.0 }, Severity::Warning);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_quarantine_strategy_for_secret() {
+    let strategy = QuarantineStrategy;
+    let issue = make_issue(IssueCategory::SecretLeak { secret_type: "api_key".into() }, Severity::Critical);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_quarantine_ignores_other() {
+    let strategy = QuarantineStrategy;
+    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "x".into(), call_count: 1, no_progress_turns: 1 }, Severity::Warning);
+    assert!(strategy.evaluate(&issue).await.is_none());
+}
+
+#[tokio::test]
+async fn test_escalate_strategy() {
+    let strategy = EscalateStrategy;
+    let issue = make_issue(IssueCategory::ModelMismatch { task_complexity: "complex".into(), model_used: "haiku".into(), suggested_model: "sonnet".into() }, Severity::Warning);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_fork_strategy() {
+    let strategy = ForkStrategy;
+    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "x".into(), call_count: 1, no_progress_turns: 1 }, Severity::Warning);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_interject_strategy() {
+    let strategy = InterjectStrategy;
+    let issue = make_issue(IssueCategory::LoopDetected { tool_name: "read".into(), call_count: 8, no_progress_turns: 8 }, Severity::Error);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_reroute_strategy() {
+    let strategy = RerouteStrategy;
+    let issue = make_issue(IssueCategory::Deadlock { agents: vec!["A".into(), "B".into()], wait_duration_secs: 60 }, Severity::Error);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
+async fn test_rollback_strategy() {
+    let strategy = RollbackStrategy;
+    let issue = make_issue(IssueCategory::AccuracyRisk { risk_factors: vec!["no_tests".into(), "lint_errors".into()] }, Severity::Error);
+    let result = strategy.evaluate(&issue).await;
+    assert!(result.is_some());
+}
+
+#[tokio::test]
 async fn test_all_strategies_have_unique_names() {
     use std::collections::HashSet;
     let strategies: Vec<Box<dyn Strategy>> = vec![

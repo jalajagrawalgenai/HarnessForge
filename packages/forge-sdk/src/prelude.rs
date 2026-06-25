@@ -1,12 +1,12 @@
 // forge-sdk/src/prelude.rs — Convenient re-exports
 
-pub use crate::agent::{AgentAdapter, AgentType};
+pub use crate::agent::{AgentAdapter, AgentType, BridgeMethod};
 pub use crate::error::{ForgeError, ForgeResult};
 pub use crate::events::{
     AgentEvent, AgentOutcome, CompressionLayer, DegradeLevel,
     Intervention, IsolationLevel, MessageContent, ToolResult,
 };
-pub use crate::harness::{Harness, HarnessBuilder, HarnessConfig, HarnessRunResult};
+pub use crate::harness::{Harness, HarnessBuilder, HarnessConfig, HarnessRuntime, HarnessRunResult};
 pub use crate::traits::detector::Detector;
 pub use crate::traits::observer::Observer;
 pub use crate::traits::store::AuditStore;
