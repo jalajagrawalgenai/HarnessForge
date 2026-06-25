@@ -10,6 +10,12 @@ Usage:
     print(result.detection_count)
 """
 
+import os
+
+# Allow PyO3 to load on Python versions newer than what it explicitly supports
+# (e.g. Python 3.14+ with PyO3 0.23.5)
+os.environ.setdefault("PYO3_USE_ABI3_FORWARD_COMPATIBILITY", "1")
+
 from ._forge_sdk import (
     HarnessRunResult,
     PyHarness,
