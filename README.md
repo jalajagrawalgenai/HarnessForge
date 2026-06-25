@@ -3,6 +3,7 @@
 **The first harness that watches, detects, intervenes, AND improves itself.**
 
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://rust-lang.org)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://pypi.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-130%20passed-brightgreen.svg)](.)
 
@@ -78,11 +79,348 @@ cargo run -p forge-cli -- init --name my-agent --agent-type solo
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
+### Python Quick Start
+
+```bash
+# Install (once published to PyPI)
+pip install forge-sdk
+
+# Or from source
+cd packages/forge-py
+pip install maturin
+maturin develop
+```
+
+```python
+from forge_sdk import create_harness, quick_run, list_presets, list_detectors
+
+# See what's available
+for p in list_presets():
+    print(p)
+
+# One-line run — harness watches a mock agent
+result = quick_run("Write a function to validate email addresses")
+print(f"Success: {result.success}")
+print(f"Detections: {result.detection_count}")
+print(f"Interventions: {result.intervention_count}")
+
+# Use a specific preset with more turns
+result = quick_run("Build a REST API", preset="claude-code", turns=8)
+
+# Harness object API — configure once, run many times
+harness = create_harness(preset="solo")
+result = harness.run("Add JWT authentication")
+result = harness.dry_run("Test run — observe only, no intervention")
+print(result.to_dict())
+```
+
+---
+
+## Beginner's Guide: Wrap Claude Code with Forge
+
+This step-by-step guide shows how to wrap **Claude Code** (or any AI agent) inside the Forge harness. You'll build a real agent adapter that sends events to the harness and checks for interventions.
+
+### Step 1: Clone & Build
+
+```bash
+git clone https://github.com/jalajagrawalgenai/HarnessForge.git
+cd HarnessForge
+cargo build --release
+```
+
+### Step 2: Run the Built-in Example
+
+```bash
+cargo run -p forge-example-basic-agent
+```
+
+You'll see:
+```
+╔══════════════════════════════════════════════════════════════╗
+║           Forge Harness — Basic Agent Example                ║
+╚══════════════════════════════════════════════════════════════╝
+
+🚀 Running agent with Solo preset...
+   Task:  Write a function to validate email addresses
+
+╔══════════════════════════════════════════════════════════════╗
+║                    SESSION RESULTS                            ║
+╠══════════════════════════════════════════════════════════════╣
+║ Agent ID:       example-agent                                ║
+║ Success:        ✅ YES                                        ║
+║ Observation cycles: 9                                        ║
+║ Detections:     0                                            ║
+║ Interventions:  0                                            ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+### Step 3: Scaffold Your Own Agent Project
+
+```bash
+# Create a new project from the Forge template
+cargo run -p forge-cli -- init --name my-claude-agent --agent-type claude-code
+cd my-claude-agent
+```
+
+This creates:
+```
+my-claude-agent/
+├── Cargo.toml          # Depends on forge-sdk + forge-harness
+├── forge.toml          # Harness configuration
+├── src/
+│   └── main.rs         # AgentAdapter template
+└── .gitignore
+```
+
+### Step 4: Implement the Claude Code Adapter
+
+Edit `src/main.rs` to wrap Claude Code. The key idea: Claude Code runs as a CLI process. Your adapter spawns it, streams its output as AgentEvents to the harness, and checks for interventions:
+
+```rust
+use forge_sdk::agent::{AgentAdapter, AgentType};
+use forge_sdk::events::{AgentEvent, AgentOutcome, Intervention, ToolResult};
+use forge_sdk::error::ForgeError;
+use forge_harness::runner;
+use tokio::sync::mpsc;
+use tokio::process::Command;
+use std::time::Instant;
+
+struct ClaudeCodeAgent {
+    id: String,
+    work_dir: String,
+}
+
+#[async_trait::async_trait]
+impl AgentAdapter for ClaudeCodeAgent {
+    fn id(&self) -> String { self.id.clone() }
+    fn agent_type(&self) -> AgentType { AgentType::ClaudeCode }
+
+    async fn run(
+        &mut self,
+        task: &str,
+        event_tx: mpsc::Sender<AgentEvent>,
+        mut intervention_rx: mpsc::Receiver<Intervention>,
+    ) -> Result<AgentOutcome, ForgeError> {
+        let now = chrono::Utc::now();
+
+        // 1. Tell the harness: agent is starting
+        event_tx.send(AgentEvent::Started {
+            agent_id: self.id(), task: task.to_string(), timestamp: now,
+        }).await.ok();
+
+        // 2. Spawn Claude Code as a subprocess
+        event_tx.send(AgentEvent::ThinkingStart {
+            agent_id: self.id(), timestamp: chrono::Utc::now(),
+        }).await.ok();
+
+        let start = Instant::now();
+        let output = Command::new("claude")
+            .arg("-p")           // print mode (non-interactive)
+            .arg(task)           // the task
+            .arg("--output-format") .arg("stream-json")  // stream events
+            .current_dir(&self.work_dir)
+            .output()
+            .await
+            .map_err(|e| ForgeError::AgentFailed {
+                reason: format!("Claude Code failed: {}", e),
+            })?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        // 3. Tell the harness about the tool call (Claude Code = a tool)
+        event_tx.send(AgentEvent::ToolCallEnd {
+            agent_id: self.id(),
+            tool: "claude-code".into(),
+            result: ToolResult {
+                content: stdout.to_string(),
+                is_error: !output.status.success(),
+                duration_ms,
+                token_count: stdout.len() as u64 / 4, // rough estimate
+            },
+            timestamp: chrono::Utc::now(),
+        }).await.ok();
+
+        // 4. Check for harness interventions
+        //    The harness may inject a nudge like:
+        //    "Note: file X was already read. Proceed without re-reading."
+        while let Ok(intervention) = intervention_rx.try_recv() {
+            match intervention {
+                Intervention::CircuitBreak { reason } => {
+                    return Err(ForgeError::CircuitBroken { reason });
+                }
+                Intervention::Nudge { message, .. } => {
+                    eprintln!("💡 Harness nudge: {}", message);
+                }
+                Intervention::Compact { target_ratio, .. } => {
+                    eprintln!("📦 Harness compact to {:.0}%", target_ratio * 100.0);
+                }
+                _ => {}
+            }
+        }
+
+        // 5. Signal completion
+        event_tx.send(AgentEvent::Completed {
+            agent_id: self.id(),
+            summary: stdout.chars().take(200).collect(),
+            timestamp: chrono::Utc::now(),
+        }).await.ok();
+
+        Ok(AgentOutcome {
+            success: output.status.success(),
+            summary: format!("Claude Code completed in {}ms", duration_ms),
+            output: Some(serde_json::json!({"stdout": stdout})),
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let mut agent = ClaudeCodeAgent {
+        id: "claude-code-1".into(),
+        work_dir: ".".into(),
+    };
+
+    println!("🚀 Running Claude Code with Forge harness...");
+    let result = runner::run_harness_session(
+        &mut agent,
+        "Write a Rust function to validate email addresses",
+        forge_sdk::presets::Preset::ClaudeCode,
+        None,
+    ).await?;
+
+    println!("✅ Done!");
+    println!("   Observations:  {}", result.observation_count);
+    println!("   Detections:    {}", result.detection_count);
+    println!("   Interventions: {}", result.intervention_count);
+    Ok(())
+}
+```
+
+### Step 5: Run Your Wrapped Agent
+
+```bash
+cargo run
+```
+
+Forge will watch Claude Code in real-time, detect issues (loops, stale context, cost anomalies), and intervene if needed.
+
+### Step 6: See What Happened
+
+```bash
+cargo run -p forge-cli -- explain <session-id>
+```
+
+This prints a human-readable audit report showing every detection and intervention.
+
+### Using Other Agents
+
+The same pattern works for any agent:
+
+| Agent | Spawn Command | AgentType Preset |
+|---|---|---|
+| **Claude Code** | `claude -p "task"` | `ClaudeCode` |
+| **Aider** | `aider --message "task"` | `Aider` |
+| **OpenAI API** | HTTP POST to `/v1/chat/completions` | `Solo` |
+| **LangGraph** | Python subprocess | `LangGraph` |
+| **Custom script** | Any CLI command | `Solo` or `Custom` |
+
+---
+
+## Publishing to PyPI
+
+### Build the Python Package
+
+```bash
+cd packages/forge-py
+
+# Install build tools
+pip install maturin twine
+
+# Build the wheel (compiles Rust → .pyd)
+maturin build --release
+
+# Output: target/wheels/forge_sdk-0.1.0-cp312-cp312-win_amd64.whl
+```
+
+### Test Locally
+
+```bash
+# Install in development mode
+maturin develop
+
+# Test it
+python -c "from forge_sdk import quick_run; r = quick_run('hello'); print(r.success)"
+```
+
+### Upload to PyPI
+
+```bash
+# First, set your PyPI token
+export TWINE_USERNAME=__token__
+export TWINE_PASSWORD=pypi-your-token-here
+
+# Upload
+twine upload target/wheels/forge_sdk-*.whl
+```
+
+### Automated CI Release
+
+Add to `.github/workflows/release.yml`:
+
+```yaml
+name: Release to PyPI
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+```
+
+### Build for Multiple Python Versions
+
+```bash
+# Build for specific Python version
+maturin build --release -i python3.10
+maturin build --release -i python3.11
+maturin build --release -i python3.12
+
+# Or use manylinux Docker for Linux builds
+docker run --rm -v $(pwd):/io ghcr.io/pyo3/maturin build --release
+```
+
+### After Publishing
+
+Users install with:
+```bash
+pip install forge-sdk
+```
+
+And use immediately:
+```python
+from forge_sdk import quick_run
+print(quick_run("Say hello").success)
+```
+
 ---
 
 ## SDK Usage
 
-### Wrapping Your Agent
+### Wrapping Your Agent (Rust)
 
 Implement the `AgentAdapter` trait to wrap any existing agent:
 
@@ -245,6 +583,7 @@ runner::run_harness_session(&mut agent, task, Preset::LangGraph, None).await?;
 | `forge-bridge` | 4 files | HTTP client, token counter, model catalog (5 models), cost calculator |
 | `forge-mcp` | 4 files | MCP client, server, gateway, discovery |
 | `forge-skills` | 3 files | Skill registry, composer, built-in skills |
+| `forge-py` | 3 files | Python bindings (PyO3) — `pip install forge-sdk` |
 | `forge-cloud` | 5 files | AWS, Azure, GCP cloud integration traits + deploy |
 | **Total** | **180+ source files** | **130 tests, 0 failures** |
 
@@ -385,6 +724,7 @@ cargo test -p forge-audit
 - [x] Skills registry + composer
 - [x] Cloud traits (AWS, Azure, GCP)
 - [x] Working example (`examples/basic-agent/`)
+- [x] Python bindings (`pip install forge-sdk`)
 - [x] 130 tests, 0 failures
 
 ### 🚧 In Progress (Phase 2)
