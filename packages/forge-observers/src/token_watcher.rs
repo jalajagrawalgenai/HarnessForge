@@ -15,6 +15,7 @@ pub struct TokenWatcher {
     _tokens_per_tool: Mutex<std::collections::HashMap<String, Vec<u64>>>,
 }
 
+#[allow(clippy::new_without_default)]
 impl TokenWatcher {
     pub fn new() -> Self {
         Self {

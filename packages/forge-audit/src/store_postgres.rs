@@ -38,11 +38,11 @@ impl AuditStore for PostgresAuditStore {
         .fetch_one(&self.pool).await.map_err(|e| ForgeError::Audit(e.to_string()))?;
         Ok(row.0)
     }
-    async fn query(&self, session_id: Option<&str>, phase: Option<&str>, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<AuditEvent>, ForgeError> {
+    async fn query(&self, _session_id: Option<&str>, _phase: Option<&str>, _limit: Option<u32>, _offset: Option<u32>) -> Result<Vec<AuditEvent>, ForgeError> {
         Ok(Vec::new()) // Stub — full impl would use sqlx::query_as
     }
     async fn search(&self, query: &str) -> Result<Vec<AuditEvent>, ForgeError> {
-        let rows: Vec<(i64,)> = sqlx::query_as("SELECT id FROM audit_events WHERE search_text ILIKE $1 LIMIT 100")
+        let _rows: Vec<(i64,)> = sqlx::query_as("SELECT id FROM audit_events WHERE search_text ILIKE $1 LIMIT 100")
             .bind(format!("%{}%", query)).fetch_all(&self.pool).await.map_err(|e| ForgeError::Audit(e.to_string()))?;
         Ok(Vec::new())
     }

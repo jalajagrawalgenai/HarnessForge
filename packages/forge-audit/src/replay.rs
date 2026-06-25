@@ -5,6 +5,7 @@ pub struct SessionReplay { events: Vec<AuditEvent>, position: usize }
 impl SessionReplay {
     pub fn new(events: Vec<AuditEvent>) -> Self { Self { events, position: 0 } }
     pub fn current(&self) -> Option<&AuditEvent> { self.events.get(self.position) }
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<&AuditEvent> { self.position += 1; self.current() }
     pub fn prev(&mut self) -> Option<&AuditEvent> { if self.position > 0 { self.position -= 1; } self.current() }
     pub fn seek(&mut self, pos: usize) -> Option<&AuditEvent> { self.position = pos.min(self.events.len().saturating_sub(1)); self.current() }

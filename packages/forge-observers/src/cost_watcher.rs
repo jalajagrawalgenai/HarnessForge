@@ -5,6 +5,7 @@ use forge_sdk::traits::observer::Observer;
 
 pub struct CostWatcher { total_cost: Mutex<f64>, turn_costs: Mutex<Vec<f64>> }
 
+#[allow(clippy::new_without_default)]
 impl CostWatcher { pub fn new() -> Self { Self { total_cost: Mutex::new(0.0), turn_costs: Mutex::new(Vec::new()) } } }
 
 #[async_trait]

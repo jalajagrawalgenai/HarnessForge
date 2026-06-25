@@ -1,8 +1,7 @@
 // forge-audit/src/trail.rs — Immutable append-only audit trail
 
 use chrono::Utc;
-use forge_sdk::error::ForgeError;
-use forge_sdk::types::audit::{AuditEvent, AuditPhase, AuditReport, CheckpointSummary, DetectionSummary, InterventionSummary, ObservationSummary};
+use forge_sdk::types::audit::{AuditEvent, AuditPhase, AuditReport, DetectionSummary, InterventionSummary, ObservationSummary};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 

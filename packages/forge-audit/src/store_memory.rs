@@ -9,6 +9,7 @@ use forge_sdk::types::audit::{
     AuditEvent, AuditPhase, AuditReport, Checkpoint, CheckpointSummary,
     DetectionSummary, InterventionSummary, ObservationSummary,
 };
+#[allow(unused_imports)]
 use uuid::Uuid;
 
 /// Fully functional in-memory audit store implementing all AuditStore trait methods.
@@ -54,8 +55,8 @@ impl AuditStore for MemoryAuditStore {
         let mut filtered: Vec<AuditEvent> = events
             .iter()
             .filter(|e| {
-                let sid_match = session_id.map_or(true, |s| e.session_id.to_string() == s);
-                let phase_match = phase.map_or(true, |p| {
+                let sid_match = session_id.is_none_or(|s| e.session_id.to_string() == s);
+                let phase_match = phase.is_none_or(|p| {
                     format!("{:?}", e.phase).to_lowercase() == p.to_lowercase()
                 });
                 sid_match && phase_match

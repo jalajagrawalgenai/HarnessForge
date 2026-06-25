@@ -7,6 +7,7 @@ use forge_sdk::types::detection::DetectedIssue;
 use forge_sdk::types::strategy::StrategyResult;
 
 pub struct NudgeStrategy {
+    #[allow(dead_code)]
     max_nudges: u32,
 }
 

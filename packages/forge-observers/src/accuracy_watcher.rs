@@ -5,6 +5,7 @@ use forge_sdk::traits::observer::Observer;
 
 pub struct AccuracyWatcher { tests_passed: Mutex<u64>, tests_failed: Mutex<u64>, lint_errors: Mutex<u64> }
 
+#[allow(clippy::new_without_default)]
 impl AccuracyWatcher { pub fn new() -> Self { Self { tests_passed: Mutex::new(0), tests_failed: Mutex::new(0), lint_errors: Mutex::new(0) } } }
 
 #[async_trait]

@@ -41,7 +41,6 @@ impl Strategy for CompactStrategy {
         };
 
         let layer = Self::select_layer(pressure);
-        let layer_clone = layer.clone();
         let intervention = Intervention::Compact {
             target_ratio: self.target_ratio,
             layer,
@@ -53,7 +52,7 @@ impl Strategy for CompactStrategy {
             priority: self.priority(),
             reasoning: format!(
                 "Context pressure at {:.0}%, applying {:?} compaction to reach {:.0}%",
-                pressure * 100.0, layer_clone, self.target_ratio * 100.0
+                pressure * 100.0, layer, self.target_ratio * 100.0
             ),
             confidence: detection.confidence,
         })

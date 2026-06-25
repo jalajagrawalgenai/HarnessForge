@@ -14,7 +14,7 @@ impl Detector for GoalDriftDetector {
         let original = obs.first().and_then(|o| o.get("original_task")).and_then(|v| v.as_str());
         let current = obs.last().and_then(|o| o.get("current_output")).and_then(|v| v.as_str());
         if let (Some(orig), Some(curr)) = (original, current) {
-            let sim = if orig.len().min(curr.len()) > 0 && &orig[..50.min(orig.len())] == &curr[..50.min(curr.len())] { 1.0 } else { 0.3 };
+            let sim = if orig.len().min(curr.len()) > 0 && orig[..50.min(orig.len())] == curr[..50.min(curr.len())] { 1.0 } else { 0.3 };
             if sim < self.similarity_threshold {
                 vec![DetectedIssue { id: Uuid::new_v4(), agent_id: agent_id.into(),
                     severity: if sim < 0.2 { Severity::Error } else { Severity::Warning },

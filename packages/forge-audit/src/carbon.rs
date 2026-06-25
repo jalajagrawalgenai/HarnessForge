@@ -1,6 +1,7 @@
 pub struct CarbonTracker { total_tokens: u64, total_seconds: f64 }
 
 impl CarbonTracker {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self { total_tokens: 0, total_seconds: 0.0 } }
     pub fn record(&mut self, tokens: u64, duration_secs: f64) { self.total_tokens += tokens; self.total_seconds += duration_secs; }
     pub fn estimate_kg_co2(&self) -> f64 {

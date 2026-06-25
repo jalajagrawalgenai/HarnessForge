@@ -3,8 +3,9 @@ use std::sync::Mutex;
 use forge_sdk::events::AgentEvent;
 use forge_sdk::traits::observer::Observer;
 
-pub struct ReliabilityWatcher { errors: Mutex<u64>, successes: Mutex<u64>, timeouts: Mutex<u64> }
+pub struct ReliabilityWatcher { errors: Mutex<u64>, successes: Mutex<u64>, #[allow(dead_code)] timeouts: Mutex<u64> }
 
+#[allow(clippy::new_without_default)]
 impl ReliabilityWatcher { pub fn new() -> Self { Self { errors: Mutex::new(0), successes: Mutex::new(0), timeouts: Mutex::new(0) } } }
 
 #[async_trait]

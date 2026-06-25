@@ -19,7 +19,7 @@ impl Detector for VarietyCollapseDetector {
         for i in 0..outputs.len() {
             for j in i+1..outputs.len() {
                 if outputs[i].len().min(outputs[j].len()) > 0
-                    && &outputs[i][..200.min(outputs[i].len())] == &outputs[j][..200.min(outputs[j].len())]
+                    && outputs[i][..200.min(outputs[i].len())] == outputs[j][..200.min(outputs[j].len())]
                 { similar += 1; }
             }
         }

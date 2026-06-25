@@ -5,6 +5,7 @@ use forge_sdk::traits::observer::Observer;
 
 pub struct LatencyWatcher { measurements: Mutex<Vec<f64>> }
 
+#[allow(clippy::new_without_default)]
 impl LatencyWatcher { pub fn new() -> Self { Self { measurements: Mutex::new(Vec::new()) } } }
 
 #[async_trait]

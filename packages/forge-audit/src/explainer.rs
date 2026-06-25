@@ -28,7 +28,7 @@ pub fn explain(report: &AuditReport) -> String {
             obs.dimension, obs.event_count
         ));
     }
-    out.push_str("\n");
+    out.push('\n');
 
     // Detections
     out.push_str(&format!(
@@ -48,7 +48,7 @@ pub fn explain(report: &AuditReport) -> String {
         out.push_str(&format!("    → Category: {}\n", det.category));
         out.push_str(&format!("    → Severity: {}\n", det.severity));
     }
-    out.push_str("\n");
+    out.push('\n');
 
     // Interventions
     out.push_str(&format!(
@@ -65,7 +65,7 @@ pub fn explain(report: &AuditReport) -> String {
             out.push_str(&format!("    → Impact: {}\n", impact));
         }
     }
-    out.push_str("\n");
+    out.push('\n');
 
     // Checkpoints
     out.push_str(&format!(

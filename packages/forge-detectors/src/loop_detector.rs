@@ -9,6 +9,7 @@ use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
 
 pub struct LoopDetector {
     /// (tool_name, args_hash) → count
+    #[allow(dead_code)]
     tool_frequency: Mutex<HashMap<String, u32>>,
     threshold: u32,
     window_turns: u32,
@@ -23,6 +24,7 @@ impl LoopDetector {
         }
     }
 
+    #[allow(dead_code)]
     fn hash_args(args: &serde_json::Value) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};

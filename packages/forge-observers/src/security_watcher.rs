@@ -28,6 +28,7 @@ const INJECTION_PATTERNS: &[&str] = &[
     "new instructions:", "forget everything",
 ];
 
+#[allow(clippy::new_without_default)]
 impl SecurityWatcher {
     pub fn new() -> Self {
         Self {

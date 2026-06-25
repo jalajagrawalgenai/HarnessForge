@@ -14,6 +14,7 @@ pub enum CustodyAction { Viewed, Exported(String), Modified, Accessed }
 pub struct ChainOfCustody { entries: Vec<CustodyEntry> }
 
 impl ChainOfCustody {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self { entries: Vec::new() } }
     pub fn log(&mut self, session_id: Uuid, user: &str, action: CustodyAction) {
         self.entries.push(CustodyEntry { id: Uuid::new_v4(), session_id, user: user.into(), action, timestamp: Utc::now() });

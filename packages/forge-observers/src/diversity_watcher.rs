@@ -6,6 +6,7 @@ use forge_sdk::traits::observer::Observer;
 
 pub struct DiversityWatcher { approaches: Mutex<HashSet<String>> }
 
+#[allow(clippy::new_without_default)]
 impl DiversityWatcher { pub fn new() -> Self { Self { approaches: Mutex::new(HashSet::new()) } } }
 
 #[async_trait]

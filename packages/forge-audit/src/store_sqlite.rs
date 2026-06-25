@@ -147,7 +147,7 @@ impl AuditStore for SqliteAuditStore {
 
         let rows = q.fetch_all(&self.pool).await
             .map_err(|e| ForgeError::Audit(e.to_string()))?;
-        rows.iter().map(|r| Self::row_to_event(r)).collect()
+        rows.iter().map(Self::row_to_event).collect()
     }
 
     async fn search(&self, query_str: &str) -> Result<Vec<AuditEvent>, ForgeError> {
@@ -158,7 +158,7 @@ impl AuditStore for SqliteAuditStore {
         .bind(&pattern).bind(&pattern).bind(&pattern)
         .fetch_all(&self.pool).await
         .map_err(|e| ForgeError::Audit(e.to_string()))?;
-        rows.iter().map(|r| Self::row_to_event(r)).collect()
+        rows.iter().map(Self::row_to_event).collect()
     }
 
     async fn get_report(&self, session_id: &str) -> Result<AuditReport, ForgeError> {
@@ -275,6 +275,6 @@ impl AuditStore for SqliteAuditStore {
         )
         .bind(session_id).fetch_all(&self.pool).await
         .map_err(|e| ForgeError::Audit(e.to_string()))?;
-        rows.iter().map(|r| Self::row_to_event(r)).collect()
+        rows.iter().map(Self::row_to_event).collect()
     }
 }

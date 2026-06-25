@@ -6,6 +6,7 @@ use forge_sdk::traits::observer::Observer;
 
 pub struct ContextQualityWatcher { files_read: Mutex<HashSet<String>>, total_reads: Mutex<u64>, redundant: Mutex<u64> }
 
+#[allow(clippy::new_without_default)]
 impl ContextQualityWatcher { pub fn new() -> Self { Self { files_read: Mutex::new(HashSet::new()), total_reads: Mutex::new(0), redundant: Mutex::new(0) } } }
 
 #[async_trait]

@@ -6,9 +6,10 @@ use forge_sdk::traits::observer::Observer;
 pub struct OrchWatcher {
     agent_count: Mutex<u32>,
     forks: Mutex<u32>,
-    max_depth: Mutex<u32>,
+    #[allow(dead_code)] max_depth: Mutex<u32>,
 }
 
+#[allow(clippy::new_without_default)]
 impl OrchWatcher {
     pub fn new() -> Self {
         Self {

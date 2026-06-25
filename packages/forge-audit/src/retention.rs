@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use forge_sdk::types::audit::AuditEvent;
 
 #[derive(Debug, Clone)]
@@ -8,7 +8,7 @@ pub struct RetentionManager { policy: RetentionPolicy }
 
 impl RetentionManager {
     pub fn new(policy: RetentionPolicy) -> Self { Self { policy } }
-    pub fn should_retain(&self, event: &AuditEvent, max_age_days: u32) -> bool {
+    pub fn should_retain(&self, event: &AuditEvent, _max_age_days: u32) -> bool {
         match &self.policy {
             RetentionPolicy::KeepAll => true,
             RetentionPolicy::KeepDays(days) => {

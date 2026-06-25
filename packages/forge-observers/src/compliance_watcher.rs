@@ -5,8 +5,9 @@ use forge_sdk::traits::observer::Observer;
 
 const PII_PATTERNS: &[&str] = &["@", "credit card", "ssn", "social security", "passport"];
 
-pub struct ComplianceWatcher { pii_exposures: Mutex<u64>, gate_bypasses: Mutex<u64> }
+pub struct ComplianceWatcher { pii_exposures: Mutex<u64>, #[allow(dead_code)] gate_bypasses: Mutex<u64> }
 
+#[allow(clippy::new_without_default)]
 impl ComplianceWatcher { pub fn new() -> Self { Self { pii_exposures: Mutex::new(0), gate_bypasses: Mutex::new(0) } } }
 
 #[async_trait]

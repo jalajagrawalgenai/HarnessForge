@@ -10,6 +10,7 @@ pub struct AlertRule {
 pub struct AlertEngine { rules: Vec<AlertRule> }
 
 impl AlertEngine {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self { rules: Vec::new() } }
     pub fn add_rule(&mut self, rule: AlertRule) { self.rules.push(rule); }
     pub fn evaluate(&self, issue: &DetectedIssue) -> Vec<String> {

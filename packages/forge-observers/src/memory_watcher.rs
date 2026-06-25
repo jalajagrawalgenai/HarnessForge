@@ -9,6 +9,7 @@ pub struct MemoryWatcher {
     store_count: Mutex<u64>,
 }
 
+#[allow(clippy::new_without_default)]
 impl MemoryWatcher {
     pub fn new() -> Self {
         Self {
