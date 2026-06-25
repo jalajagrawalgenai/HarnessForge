@@ -1,0 +1,17 @@
+{
+  "name": "forge-vscode",
+  "displayName": "Forge — Agent Harness",
+  "version": "0.1.0",
+  "description": "Monitor and control Forge agent sessions from VS Code",
+  "main": "extension.js",
+  "contributes": {
+    "commands": [
+      {"command": "forge.runAgent","title": "Forge: Run Agent"},
+      {"command": "forge.replaySession","title": "Forge: Replay Session"},
+      {"command": "forge.explainSession","title": "Forge: Explain Session"}
+    ],
+    "views": {
+      "explorer": [{"id": "forge-sessions","name": "Forge Sessions"}]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+replicaCount: 1
+image: forgelabs/forge:latest
+service:
+  type: ClusterIP
+  port: 3000
+audit:
+  storage: sqlite
+  persistence: false
+harness:
+  logLevel: info
