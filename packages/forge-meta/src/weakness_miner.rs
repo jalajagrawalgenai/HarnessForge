@@ -44,7 +44,7 @@ impl WeaknessMiner {
                 entry.1 += audit.duration_secs;
             }
         }
-        for (_key, (count, avg_time, consequence)) in &late_detections {
+        for (count, avg_time, consequence) in late_detections.values() {
             if *count >= 3 {
                 patterns.push(WeaknessPattern {
                     id: format!("pat_{}", patterns.len()),
