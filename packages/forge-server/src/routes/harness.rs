@@ -1,4 +1,4 @@
-use axum::{extract::Path, Json};
+use axum::Json;
 use serde_json::{json, Value};
 
 pub async fn get() -> Json<Value> { Json(json!({"harness":"v1.0.0","observers":[],"detectors":[],"strategies":[]})) }

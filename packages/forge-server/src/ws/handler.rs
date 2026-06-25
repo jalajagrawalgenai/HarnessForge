@@ -3,17 +3,21 @@ use axum::response::IntoResponse;
 use tokio::sync::broadcast;
 use serde_json::json;
 
+#[allow(dead_code)]
 pub struct WsState { pub tx: broadcast::Sender<String> }
 
+#[allow(dead_code)]
 impl WsState {
     pub fn new() -> Self { let (tx, _) = broadcast::channel(256); Self { tx } }
     pub fn broadcast(&self, msg: &str) { let _ = self.tx.send(msg.to_string()); }
 }
 
+#[allow(dead_code)]
 pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
 }
 
+#[allow(dead_code)]
 async fn handle_socket(mut socket: WebSocket) {
     while let Some(Ok(msg)) = socket.recv().await {
         if let Message::Text(text) = msg {

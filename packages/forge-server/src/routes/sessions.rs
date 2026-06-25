@@ -10,6 +10,6 @@ pub async fn create(Json(body): Json<Value>) -> Json<Value> {
 pub async fn get(Path(id): Path<String>) -> Json<Value> { Json(json!({"id":id,"status":"active"})) }
 pub async fn delete(Path(id): Path<String>) -> Json<Value> { Json(json!({"deleted":id})) }
 pub async fn stream(Path(id): Path<String>) -> Json<Value> { Json(json!({"stream":format!("sse://sessions/{}",id)})) }
-pub async fn checkpoints(Path(id): Path<String>) -> Json<Value> { Json(json!({"checkpoints":[]})) }
+pub async fn checkpoints(Path(_id): Path<String>) -> Json<Value> { Json(json!({"checkpoints":[]})) }
 pub async fn pause(Path(id): Path<String>) -> Json<Value> { Json(json!({"paused":id})) }
 pub async fn resume(Path(id): Path<String>) -> Json<Value> { Json(json!({"resumed":id})) }

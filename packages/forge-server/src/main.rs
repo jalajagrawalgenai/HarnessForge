@@ -1,4 +1,4 @@
-use axum::{Router, routing::get, Json, extract::Path};
+use axum::{Router, routing::get, Json};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 
