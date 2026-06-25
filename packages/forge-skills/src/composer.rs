@@ -1,4 +1,4 @@
-use crate::registry::{Skill, SkillRegistry};
+use crate::registry::Skill;
 
 pub struct SkillComposer;
 

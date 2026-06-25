@@ -19,6 +19,7 @@ pub struct SkillRegistry {
 }
 
 impl SkillRegistry {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self { skills: HashMap::new() } }
     pub fn register(&mut self, skill: Skill) { self.skills.insert(skill.name.clone(), skill); }
     pub fn get(&self, name: &str) -> Option<&Skill> { self.skills.get(name) }
