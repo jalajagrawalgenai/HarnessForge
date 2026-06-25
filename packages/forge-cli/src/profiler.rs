@@ -1,8 +1,13 @@
 use std::time::Instant;
 
-pub struct Profiler { start: Instant, measurements: Vec<(String, f64)> }
+pub struct Profiler {
+    #[allow(dead_code)]
+    start: Instant,
+    measurements: Vec<(String, f64)>,
+}
 
 impl Profiler {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self { start: Instant::now(), measurements: Vec::new() } }
     pub fn measure(&mut self, label: &str, f: impl FnOnce()) {
         let t0 = Instant::now(); f(); let elapsed = t0.elapsed().as_micros() as f64;

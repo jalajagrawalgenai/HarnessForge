@@ -10,11 +10,10 @@ pub mod proposal_validator;
 pub mod scheduler;
 pub mod weakness_miner;
 
-use std::sync::Arc;
 use forge_sdk::error::ForgeError;
-use crate::weakness_miner::{WeaknessMiner, WeaknessPattern};
-use crate::harness_proposer::{HarnessProposer, HarnessEdit};
-use crate::proposal_validator::{ProposalValidator, ValidatedEdit};
+use crate::weakness_miner::WeaknessMiner;
+use crate::harness_proposer::HarnessProposer;
+use crate::proposal_validator::ProposalValidator;
 use crate::edit_registry::EditRegistry;
 use crate::ab_testing::ABTestEngine;
 
@@ -25,6 +24,7 @@ pub struct MetaHarness {
     proposer: HarnessProposer,
     validator: ProposalValidator,
     registry: EditRegistry,
+    #[allow(dead_code)]
     ab_engine: ABTestEngine,
 }
 

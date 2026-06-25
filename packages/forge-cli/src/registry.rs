@@ -6,6 +6,7 @@ pub struct PluginEntry { pub name: String, pub version: String, pub description:
 pub struct PluginMarketplace { plugins: Vec<PluginEntry> }
 
 impl PluginMarketplace {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self { plugins: vec![
         PluginEntry { name:"custom-security".into(), version:"1.0.0".into(), description:"Additional security patterns".into(), downloads:1200, verified:true },
         PluginEntry { name:"slack-notifier".into(), version:"0.2.0".into(), description:"Slack notification strategy".into(), downloads:890, verified:true },

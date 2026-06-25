@@ -44,7 +44,7 @@ impl WeaknessMiner {
                 entry.1 += audit.duration_secs;
             }
         }
-        for (key, (count, avg_time, consequence)) in &late_detections {
+        for (_key, (count, avg_time, consequence)) in &late_detections {
             if *count >= 3 {
                 patterns.push(WeaknessPattern {
                     id: format!("pat_{}", patterns.len()),
@@ -89,7 +89,7 @@ impl WeaknessMiner {
         // ─── 3. Find model-specific failure patterns ───
         let mut model_failures: HashMap<String, (u32, f64)> = HashMap::new();
         for audit in audits {
-            let key = format!("{}_{}", audit.model, if audit.success { "success" } else { "failure" });
+            let _key = format!("{}_{}", audit.model, if audit.success { "success" } else { "failure" });
             let entry = model_failures.entry(audit.model.clone()).or_insert((0, 0.0));
             if !audit.success { entry.0 += 1; }
         }

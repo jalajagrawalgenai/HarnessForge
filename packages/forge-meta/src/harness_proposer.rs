@@ -31,6 +31,7 @@ pub enum EditChange {
 }
 
 impl HarnessProposer {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self { Self }
 
     pub fn propose(
@@ -46,7 +47,7 @@ impl HarnessProposer {
         }
 
         // Deduplicate and limit
-        edits.sort_by(|a, b| b.rationale.len().cmp(&a.rationale.len()));
+        edits.sort_by_key(|b| std::cmp::Reverse(b.rationale.len()));
         edits.dedup_by(|a, b| a.target_matches(b));
 
         Ok(edits)
