@@ -6,7 +6,6 @@
 // 3. Drains all events and feeds through the observe→detect→strategy pipeline
 // 4. Runs final pipeline cycle and returns results
 
-use std::sync::Arc;
 use forge_sdk::agent::AgentAdapter;
 use forge_sdk::error::ForgeError;
 use forge_sdk::events::{AgentEvent, AgentOutcome, Intervention};
@@ -83,7 +82,7 @@ impl Runtime {
             turn += 1;
 
             // Run pipeline cycle periodically (every 3 turns or after tool calls)
-            let should_cycle = turn % 3 == 0
+            let should_cycle = turn.is_multiple_of(3)
                 || matches!(&event, AgentEvent::ToolCallEnd { .. });
             if should_cycle && turn > last_intervention_cycle {
                 let interventions = self.pipeline.cycle(&agent_id).await;
@@ -139,6 +138,7 @@ impl SessionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use forge_sdk::agent::{AgentType, MockAgent};
     use crate::factory::build_registry_from_preset;
     use forge_sdk::presets::Preset;

@@ -1,6 +1,7 @@
 use serde_json::json;
 use forge_sdk::types::audit::AuditEvent;
 
+#[allow(dead_code)]
 pub struct WandBExporter { api_key: String, project: String }
 
 impl WandBExporter {

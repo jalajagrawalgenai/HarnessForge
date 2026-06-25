@@ -1,7 +1,7 @@
-use forge_sdk::error::ForgeError;
 use crate::models::ModelCatalog;
 use crate::cost::CostCalculator;
 
+#[allow(dead_code)]
 pub struct LiteLlmClient {
     base_url: String,
     api_key: Option<String>,

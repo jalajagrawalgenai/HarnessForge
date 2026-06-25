@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use forge_sdk::events::{AgentEvent, Intervention};
 use forge_sdk::traits::store::AuditStore;
-use forge_sdk::types::audit::{AuditEvent, AuditPhase, Checkpoint};
+use forge_sdk::types::audit::{AuditEvent, AuditPhase};
 use forge_sdk::types::detection::DetectedIssue;
 use forge_sdk::types::strategy::StrategyResult;
 

@@ -65,8 +65,7 @@ pub async fn dry_run(
     task: &str,
     preset: Preset,
 ) -> Result<HarnessRunResult, ForgeError> {
-    let mut config = HarnessConfig::default();
-    config.dry_run = true;
+    let config = HarnessConfig { dry_run: true, ..Default::default() };
     let registry = build_registry_from_preset(&preset);
     run_with_registry(agent, task, registry, config, None).await
 }

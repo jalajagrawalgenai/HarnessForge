@@ -1,6 +1,7 @@
 use serde_json::json;
 use forge_sdk::types::audit::AuditEvent;
 
+#[allow(dead_code)]
 pub struct LangFuseExporter { public_key: String, secret_key: String, endpoint: String }
 
 impl LangFuseExporter {
