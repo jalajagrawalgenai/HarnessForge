@@ -9,3 +9,5 @@ pub mod search;
 pub mod signing;
 pub mod store_sqlite;
 pub mod trail;
+pub mod alerts;
+pub mod custody;

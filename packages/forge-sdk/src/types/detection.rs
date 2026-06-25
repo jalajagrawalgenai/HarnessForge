@@ -87,3 +87,38 @@ pub enum IssueCategory {
         gap_type: String,
     },
 }
+
+impl DetectedIssue {
+    pub fn category_name(&self) -> &str {
+        match &self.category {
+            IssueCategory::LoopDetected { .. } => "loop",
+            IssueCategory::StaleContext { .. } => "stale_context",
+            IssueCategory::CostAnomaly { .. } => "cost_anomaly",
+            IssueCategory::Deadlock { .. } => "deadlock",
+            IssueCategory::Hallucination { .. } => "hallucination",
+            IssueCategory::PromptInjection { .. } => "prompt_injection",
+            IssueCategory::SecretLeak { .. } => "secret_leak",
+            IssueCategory::VarietyCollapse { .. } => "variety_collapse",
+            IssueCategory::ConversationStall { .. } => "conversation_stall",
+            IssueCategory::GoalDrift { .. } => "goal_drift",
+            IssueCategory::ModelMismatch { .. } => "model_mismatch",
+            IssueCategory::AccuracyRisk { .. } => "accuracy_risk",
+            IssueCategory::RunawayCost { .. } => "runaway_cost",
+            IssueCategory::ResourceExhaustion { .. } => "resource_exhaustion",
+            IssueCategory::OutputDegradation { .. } => "output_degradation",
+            IssueCategory::ComplianceGap { .. } => "compliance_gap",
+        }
+    }
+}
+
+impl PartialOrd for Severity {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Severity {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let v = |s: &Severity| match s { Severity::Info=>0, Severity::Warning=>1, Severity::Error=>2, Severity::Critical=>3 };
+        v(self).cmp(&v(other))
+    }
+}

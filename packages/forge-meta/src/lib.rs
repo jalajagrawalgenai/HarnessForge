@@ -1,6 +1,11 @@
 pub mod ab_testing;
+pub mod confidence;
+pub mod cross_model;
 pub mod edit_registry;
+pub mod efficacy;
 pub mod harness_proposer;
+pub mod manual_edit;
+pub mod notifications;
 pub mod proposal_validator;
 pub mod scheduler;
 pub mod weakness_miner;

@@ -1,0 +1,22 @@
+[package]
+name = "forge-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge Server — REST + SSE + WebSocket API"
+
+[dependencies]
+forge-sdk = { path = "../forge-sdk" }
+forge-harness = { path = "../forge-harness" }
+forge-audit = { path = "../forge-audit" }
+forge-meta = { path = "../forge-meta" }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }

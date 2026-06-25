@@ -13,6 +13,7 @@ pub struct HarnessConfig {
     pub checkpoint_interval: u32,
     pub max_interventions: u32,
     pub dry_run: bool,
+    pub simulation: bool,
     pub session_id: Option<String>,
 }
 
@@ -22,6 +23,7 @@ impl Default for HarnessConfig {
             checkpoint_interval: 10,
             max_interventions: 20,
             dry_run: false,
+            simulation: false,
             session_id: None,
         }
     }
@@ -53,6 +55,11 @@ impl HarnessBuilder {
 
     pub fn dry_run(mut self, dry_run: bool) -> Self {
         self.config.dry_run = dry_run;
+        self
+    }
+
+    pub fn simulation(mut self, sim: bool) -> Self {
+        self.config.simulation = sim;
         self
     }
 
