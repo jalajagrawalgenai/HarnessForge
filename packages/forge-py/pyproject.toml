@@ -5,8 +5,29 @@ build-backend = "maturin"
 [project]
 name = "forge-sdk"
 version = "0.1.0"
-description = "Forge Python bindings"
+description = "Forge — AI Agent Harness SDK for Python. Wrap any AI agent with 12-dimension observation, 16 detectors, 14 autonomous intervention strategies."
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
+authors = [{ name = "Forge Labs" }]
+keywords = ["ai", "agent", "llm", "harness", "observability", "intervention"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/jalajagrawalgenai/HarnessForge"
+Repository = "https://github.com/jalajagrawalgenai/HarnessForge"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+python-source = "."
+module-name = "forge_sdk"

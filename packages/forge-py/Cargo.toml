@@ -1,0 +1,17 @@
+[package]
+name = "forge-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge Python bindings — AI agent harness SDK for Python"
+
+[lib]
+name = "_forge_sdk"
+crate-type = ["cdylib"]
+
+[dependencies]
+forge-sdk = { path = "../forge-sdk" }
+forge-harness = { path = "../forge-harness" }
+pyo3 = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
