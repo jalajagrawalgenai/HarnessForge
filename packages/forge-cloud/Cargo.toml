@@ -1,0 +1,14 @@
+[package]
+name = "forge-cloud"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge Cloud — AWS, Azure, GCP integrations"
+
+[dependencies]
+forge-sdk = { path = "../forge-sdk" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }

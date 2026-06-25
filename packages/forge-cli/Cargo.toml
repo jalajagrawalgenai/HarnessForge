@@ -1,0 +1,17 @@
+[package]
+name = "forge-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge CLI — terminal interface for the agent harness"
+
+[dependencies]
+forge-sdk = { path = "../forge-sdk" }
+forge-harness = { path = "../forge-harness" }
+forge-audit = { path = "../forge-audit" }
+tokio = { workspace = true }
+clap = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

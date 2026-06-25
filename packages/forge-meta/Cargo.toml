@@ -1,0 +1,20 @@
+[package]
+name = "forge-meta"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge Meta-Harness — self-improving harness that learns across sessions"
+
+[dependencies]
+forge-sdk = { path = "../forge-sdk" }
+forge-harness = { path = "../forge-harness" }
+forge-audit = { path = "../forge-audit" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+rand = "0.8"
+libm = "0.2"
