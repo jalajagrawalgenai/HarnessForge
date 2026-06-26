@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 /// # Your LangGraph agent code here
 /// graph = create_graph()
 /// result = graph.invoke({"task": sys.argv[1]})
-/// print(json.dumps({"success": True, "output": str(result)}))
+/// print(json.dumps({"success": True, "output": str(result)}).to_string()
 /// "#);
 /// ```
 pub struct PythonAgent {
@@ -129,26 +129,26 @@ try:
     # Example for LangGraph:
     #   graph = build_my_graph()
     #   result = graph.invoke({{"task": task}})
-    #   print(json.dumps({{"success": True, "output": str(result)}}))
+    #   print(json.dumps({{"success": True, "output": str(result)}}).to_string()
     #
     # Example for CrewAI:
     #   agent = Agent(role="assistant", goal=task, backstory="...", allow_delegation=False)
     #   task_obj = Task(description=task, expected_output="...", agent=agent)
     #   crew = Crew(agents=[agent], tasks=[task_obj])
     #   result = crew.kickoff()
-    #   print(json.dumps({{"success": True, "output": str(result)}}))
+    #   print(json.dumps({{"success": True, "output": str(result)}}).to_string()
 
     print(json.dumps({{
         "success": False,
         "output": "Agent script not configured. Set up your {{}} agent logic in the script.",
         "framework": "{}"
-    }}))
+    }}).to_string()
 except Exception as e:
     print(json.dumps({{
         "success": False,
         "output": str(e),
         "traceback": traceback.format_exc()
-    }}))
+    }}).to_string()
 "#,
             self.agent_type.to_string(),
         )
@@ -228,24 +228,20 @@ impl AgentAdapter for PythonAgent {
 
         let start = std::time::Instant::now();
         let output = if let Some(timeout_secs) = self.timeout_secs {
-            let child = cmd.spawn().map_err(|e| ForgeError::AgentFailed {
-                reason: format!("Failed to spawn Python: {}", e),
-            })?;
+            let child = cmd.spawn().map_err(|e| ForgeError::ToolExecution(
+                format!("Failed to spawn Python: {}", e)))?;
             tokio::time::timeout(
                 std::time::Duration::from_secs(timeout_secs),
                 child.wait_with_output(),
             )
             .await
-            .map_err(|_| ForgeError::AgentFailed {
-                reason: format!("Python agent timed out after {}s", timeout_secs),
-            })?
-            .map_err(|e| ForgeError::AgentFailed {
-                reason: format!("Python process error: {}", e),
-            })?
+            .map_err(|_| ForgeError::ToolExecution(
+                format!("Python agent timed out after {}s", timeout_secs)))?
+            .map_err(|e| ForgeError::ToolExecution(
+                format!("Python process error: {}", e)))?
         } else {
-            cmd.output().await.map_err(|e| ForgeError::AgentFailed {
-                reason: format!("Failed to run Python: {}", e),
-            })?
+            cmd.output().await.map_err(|e| ForgeError::ToolExecution(
+                format!("Failed to run Python: {}", e)))?
         };
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -259,7 +255,7 @@ impl AgentAdapter for PythonAgent {
                 "success": !is_error,
                 "output": stdout,
                 "stderr": stderr,
-            }));
+            )));
 
         let result_success = parsed["success"].as_bool().unwrap_or(!is_error);
         let result_output = parsed["output"].as_str().unwrap_or(&stdout).to_string();
@@ -272,7 +268,7 @@ impl AgentAdapter for PythonAgent {
                 tool: tool_name.clone(),
                 args: serde_json::json!({"task": task}),
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         let _ = event_tx
@@ -286,7 +282,7 @@ impl AgentAdapter for PythonAgent {
                     token_count: (stdout.len() / 4) as u64,
                 },
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         self.handle_interventions(&mut intervention_rx)?;
@@ -296,7 +292,7 @@ impl AgentAdapter for PythonAgent {
             .send(AgentEvent::ThinkingEnd {
                 agent_id: self.id.clone(),
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         // 6. Completed
@@ -314,7 +310,7 @@ impl AgentAdapter for PythonAgent {
                 "{} agent completed in {}ms",
                 self.agent_type, duration_ms
             ),
-            output: Some(parsed),
+            output: Some(parsed.to_string()),
         })
     }
 }

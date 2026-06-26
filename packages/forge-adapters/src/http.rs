@@ -10,7 +10,7 @@ use chrono::Utc;
 use forge_sdk::agent::{AgentAdapter, AgentType};
 use forge_sdk::error::ForgeError;
 use forge_sdk::events::{AgentEvent, AgentOutcome, Intervention, ToolResult};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::sync::mpsc;
 
 /// API format for the HTTP agent.
@@ -195,9 +195,8 @@ impl HttpAgent {
             .post(&endpoint)
             .json(&body)
             .build()
-            .map_err(|e| ForgeError::AgentFailed {
-                reason: format!("Failed to build HTTP request: {}", e),
-            })?;
+            .map_err(|e| ForgeError::ToolExecution(
+                format!("Failed to build HTTP request: {}", e)))?;
 
         // Set auth header
         let auth_header = match self.config.format {
@@ -262,7 +261,7 @@ impl HttpAgent {
         while let Ok(intervention) = rx.try_recv() {
             match intervention {
                 Intervention::CircuitBreak { reason } => {
-                    return Err(ForgeError::CircuitBroken { reason });
+                    return Err(ForgeError::CircuitBroken { reason ));
                 }
                 Intervention::Pause { reason, .. } => {
                     tracing::warn!(agent_id = %self.id, reason = %reason, "Paused by harness");
@@ -319,9 +318,8 @@ impl AgentAdapter for HttpAgent {
         let start = std::time::Instant::now();
 
         let response = self.client.execute(req).await.map_err(|e| {
-            ForgeError::AgentFailed {
-                reason: format!("HTTP request failed: {}", e),
-            }
+            ForgeError::ToolExecution(
+                format!("HTTP request failed: {}", e)))
         })?;
 
         let status = response.status();
@@ -349,7 +347,7 @@ impl AgentAdapter for HttpAgent {
                 tool: self.config.model.clone(),
                 args: serde_json::json!({"format": format!("{:?}", self.config.format), "task": task}),
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         // 6. Tool call end
@@ -402,7 +400,7 @@ impl AgentAdapter for HttpAgent {
                 "token_count": token_count,
                 "status_code": status.as_u16(),
                 "response": text,
-            })),
+            }).to_string(),
         })
     }
 }

@@ -214,27 +214,23 @@ impl AgentAdapter for CliAgent {
         let mut cmd = self.build_command(task);
 
         let output = if let Some(timeout_secs) = self.config.timeout_secs {
-            let child = cmd.spawn().map_err(|e| ForgeError::AgentFailed {
-                reason: format!("Failed to spawn {}: {}", self.config.command, e),
-            })?;
+            let child = cmd.spawn().map_err(|e| ForgeError::ToolExecution(
+                format!("Failed to spawn {}: {}", self.config.command, e)))?;
 
             let output =
                 tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), child.wait_with_output())
                     .await
-                    .map_err(|_| ForgeError::AgentFailed {
-                        reason: format!(
+                    .map_err(|_| ForgeError::ToolExecution(
+                        format!(
                             "{} timed out after {} seconds",
                             self.config.command, timeout_secs
-                        ),
-                    })?
-                    .map_err(|e| ForgeError::AgentFailed {
-                        reason: format!("{} process error: {}", self.config.command, e),
-                    })?;
+                        )))?
+                    .map_err(|e| ForgeError::ToolExecution(
+                        format!("{} process error: {}", self.config.command, e)))?;
             output
         } else {
-            cmd.output().await.map_err(|e| ForgeError::AgentFailed {
-                reason: format!("Failed to run {}: {}", self.config.command, e),
-            })?
+            cmd.output().await.map_err(|e| ForgeError::ToolExecution(
+                format!("Failed to run {}: {}", self.config.command, e)))?
         };
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -249,7 +245,7 @@ impl AgentAdapter for CliAgent {
                 tool: self.config.command.clone(),
                 args: serde_json::json!({"task": task}),
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         let _ = event_tx
@@ -267,7 +263,7 @@ impl AgentAdapter for CliAgent {
                     token_count: (stdout.len() / 4) as u64, // rough estimate: 4 chars ≈ 1 token
                 },
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         // 6. Check for interventions after execution
@@ -278,7 +274,7 @@ impl AgentAdapter for CliAgent {
             .send(AgentEvent::ThinkingEnd {
                 agent_id: self.id.clone(),
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         // 8. Signal completion
@@ -287,7 +283,7 @@ impl AgentAdapter for CliAgent {
                 agent_id: self.id.clone(),
                 summary: stdout.chars().take(300).collect(),
                 timestamp: Utc::now(),
-            })
+            ))
             .await;
 
         Ok(AgentOutcome {
@@ -304,7 +300,7 @@ impl AgentAdapter for CliAgent {
                 "exit_code": output.status.code(),
                 "stdout_len": stdout.len(),
                 "stderr_len": stderr.len(),
-            })),
+            }).to_string(),
         })
     }
 }

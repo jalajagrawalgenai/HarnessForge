@@ -76,8 +76,8 @@ impl Default for AuthConfig {
 
 /// Validate an SSO token and return the authenticated user.
 pub async fn validate_sso_token(
-    config: &SsoConfig,
-    token: &str,
+    _config: &SsoConfig,
+    _token: &str,
 ) -> Result<AuthenticatedUser, AuthError> {
     // In production: validate JWT/OIDC token against the IdP's JWKS endpoint
     // For now: return the scaffold structure
