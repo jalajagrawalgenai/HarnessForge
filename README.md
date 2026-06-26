@@ -512,6 +512,7 @@ result = quick_run("task", preset="crewai")
 | `forge-mcp` | 4 files | MCP client, server, gateway, discovery |
 | `forge-skills` | 3 files | Skill registry, composer, built-in skills |
 | `forge-py` | 3 files | Python bindings (PyO3) — `pip install forge-agent-sdk` |
+| `forge-adapters` | 6 files | Real AgentAdapter impls for ALL 31 agent types (CLI, HTTP, Python, Bridge) + AdapterFactory |
 | `forge-cloud` | 5 files | AWS, Azure, GCP cloud integration traits + deploy |
 | **Total** | **180+ source files** | **130 tests, 0 failures** |
 
@@ -584,20 +585,23 @@ twine upload target/wheels/forge_sdk-*.whl
 - [x] Docker image (multi-stage Dockerfile)
 - [x] Dashboard scaffold (Leptos WASM, `forge-dashboard`)
 - [x] CI/CD workflow (`.github/workflows/publish-pypi.yml` — builds 15 wheels on tag push)
+- [x] Real AgentAdapters for ALL 31 agent types (`packages/forge-adapters/`)
+- [x] AdapterFactory — auto-maps AgentType → CliAgent/HttpAgent/PythonAgent/BridgeAgent
 - [x] 130 tests, 0 failures
 
 ### 🚧 In Progress
-- [ ] Real AgentAdapter for Claude API (currently MockAgent only)
 - [ ] TypeScript bindings (NAPI-RS)
 - [ ] CLI TUI (`forge watch` with ratatui)
+- [ ] forge-server route wiring to real SDK
 
 ### 📋 Planned
 - [ ] VSCode extension
-- [ ] Kubernetes operator
-- [ ] Plugin marketplace
-- [ ] SSO/SAML/OIDC
-- [ ] EU AI Act compliance packs
-- [ ] LangFuse/W&B native export
+- [ ] Kubernetes operator + Helm chart
+- [ ] Plugin marketplace (community registry)
+- [ ] SSO/SAML/OIDC (Okta, Azure AD, Google Workspace)
+- [ ] EU AI Act compliance report templates
+- [ ] LangFuse / W&B Weave native export
+- [ ] PagerDuty / OpsGenie integration
 
 ---
 
