@@ -300,7 +300,7 @@ impl AgentAdapter for CliAgent {
                 "exit_code": output.status.code(),
                 "stdout_len": stdout.len(),
                 "stderr_len": stderr.len(),
-            }).to_string(),
+            }).to_string()),
         })
     }
 }

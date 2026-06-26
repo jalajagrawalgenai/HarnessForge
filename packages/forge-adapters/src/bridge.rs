@@ -327,7 +327,7 @@ impl AgentAdapter for BridgeAgent {
                 "bridge_mode": "poll",
                 "duration_ms": duration_ms,
                 "events_collected": self.events.len(),
-            }).to_string(),
+            }).to_string()),
         })
     }
 }

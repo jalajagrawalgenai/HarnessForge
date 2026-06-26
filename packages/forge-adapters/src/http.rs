@@ -400,7 +400,7 @@ impl AgentAdapter for HttpAgent {
                 "token_count": token_count,
                 "status_code": status.as_u16(),
                 "response": text,
-            }).to_string(),
+            }).to_string()),
         })
     }
 }
