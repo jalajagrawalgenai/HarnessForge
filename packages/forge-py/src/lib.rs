@@ -221,12 +221,12 @@ fn list_observers() -> Vec<String> {
 
 #[pyfunction]
 fn get_version() -> String {
-    "0.1.4".into()
+    "0.1.5".into()
 }
 
 #[pymodule]
-#[pyo3(name = "_forge_sdk")]
-fn _forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "forge_sdk")]
+fn forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HarnessRunResult>()?;
     m.add_class::<PyHarness>()?;
     m.add_function(wrap_pyfunction!(create_harness, m)?)?;
