@@ -81,9 +81,16 @@ result = harness.run_with("Add JWT authentication", preset="claude-code", turns=
 ### Step 4: Expected Output
 
 ```
-Presets: ['solo', 'claude-code', 'langgraph', 'crewai', 'autogen', 'langchain', ...]
+Presets: ['solo', 'langgraph', 'crewai', 'autogen', 'langchain', 'openai-swarm',
+          'semantic-kernel', 'haystack', 'dspy', 'llamaindex', 'taskweaver',
+          'agno', 'atomic-agents', 'bee-agent', 'pydantic-ai', 'claude-code',
+          'aider', 'cline', 'continue', 'vercel-ai', 'copilot', 'cursor',
+          'windsurf', 'devin', 'amazon-q', 'replit-agent', 'pearai',
+          'bolt-new', 'lovable', 'v0', 'custom']  # 31 total
 Detectors: ['loop', 'stale_context', 'cost_anomaly', 'deadlock', 'hallucination',
-            'prompt_injection', 'secret_leak', 'variety_collapse', ...]
+            'prompt_injection', 'secret_leak', 'variety_collapse', 'conversation_stall',
+            'goal_drift', 'model_mismatch', 'accuracy_risk', 'runaway_cost',
+            'resource_exhaustion', 'output_degradation', 'compliance_gap']  # 16 total
 
 Success:       True
 Observations:  9
@@ -369,14 +376,22 @@ async fn main() -> anyhow::Result<()> {
 
 | Preset | Agent Type | Preset | Agent Type |
 |---|---|---|---|
-| `solo` | Single LLM agent (Claude API, ChatGPT) | `crewai` | CrewAI multi-agent |
-| `claude-code` | Claude Code CLI | `autogen` | AutoGen multi-agent |
-| `langgraph` | LangGraph agent | `langchain` | LangChain agent |
+| `solo` | Single LLM agent (Claude API, ChatGPT) | `langgraph` | LangGraph agent |
+| `crewai` | CrewAI multi-agent | `autogen` | AutoGen multi-agent |
+| `langchain` | LangChain agent | `openai-swarm` | OpenAI Swarm |
+| `semantic-kernel` | Microsoft Semantic Kernel | `haystack` | Haystack by deepset |
+| `dspy` | DSPy optimizer | `llamaindex` | LlamaIndex agent |
+| `taskweaver` | Microsoft TaskWeaver | `agno` | Agno framework |
+| `atomic-agents` | Atomic Agents | `bee-agent` | Bee Agent Framework |
+| `pydantic-ai` | PydanticAI | `claude-code` | Claude Code CLI |
 | `aider` | Aider CLI | `cline` | Cline (VS Code) |
-| `continue` | Continue.dev | `copilot` | GitHub Copilot |
-| `cursor` | Cursor IDE | `windsurf` | Windsurf IDE |
-| `devin` | Devin (Cognition) | `dspy` | DSPy optimizer |
-| `llamaindex` | LlamaIndex agent | `custom` | Custom agent |
+| `continue` | Continue.dev | `vercel-ai` | Vercel AI SDK |
+| `copilot` | GitHub Copilot | `cursor` | Cursor IDE |
+| `windsurf` | Windsurf IDE | `devin` | Devin (Cognition) |
+| `amazon-q` | Amazon Q Developer | `replit-agent` | Replit Agent |
+| `pearai` | PearAI | `bolt-new` | Bolt.new |
+| `lovable` | Lovable | `v0` | v0 by Vercel |
+| `custom` | Custom agent | | |
 
 Use them all the same way:
 

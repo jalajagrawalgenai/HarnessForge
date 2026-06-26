@@ -106,7 +106,7 @@ When the harness detects an issue:
 
 ### Presets
 
-Available presets: `solo`, `claude-code`, `langgraph`, `crewai`, `autogen`, `langchain`, `dspy`, `llamaindex`, `aider`, `cline`, `continue`, `copilot`, `cursor`, `windsurf`, `devin`, `custom`, and more.
+All 31 presets: `solo`, `langgraph`, `crewai`, `autogen`, `langchain`, `openai-swarm`, `semantic-kernel`, `haystack`, `dspy`, `llamaindex`, `taskweaver`, `agno`, `atomic-agents`, `bee-agent`, `pydantic-ai`, `claude-code`, `aider`, `cline`, `continue`, `vercel-ai`, `copilot`, `cursor`, `windsurf`, `devin`, `amazon-q`, `replit-agent`, `pearai`, `bolt-new`, `lovable`, `v0`, `custom`.
 
 ```python
 # Use any preset the same way
