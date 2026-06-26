@@ -10,12 +10,17 @@ pub async fn list_providers() -> Json<Value> {
     ]}))
 }
 pub async fn configure(Path(provider): Path<String>, Json(body): Json<Value>) -> Json<Value> {
-    Json(json!({"configured":provider,"region":body.get("region").and_then(|v|v.as_str()),"status":"ok"}))
+    Json(
+        json!({"configured":provider,"region":body.get("region").and_then(|v|v.as_str()),"status":"ok"}),
+    )
 }
 pub async fn provider_status(Path(provider): Path<String>) -> Json<Value> {
     Json(json!({"provider":provider,"status":"configured","connected":false}))
 }
 pub async fn deploy(Json(body): Json<Value>) -> Json<Value> {
-    let provider = body.get("provider").and_then(|v|v.as_str()).unwrap_or("aws");
+    let provider = body
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("aws");
     Json(json!({"deployed":true,"provider":provider,"message":"Deployment initiated"}))
 }

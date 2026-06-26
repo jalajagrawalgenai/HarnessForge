@@ -61,10 +61,7 @@ impl Pipeline {
 
     /// Attach a broadcast sender for forwarding events to external consumers
     /// (e.g., WebSocket/SSE for live dashboards).
-    pub fn with_event_broadcaster(
-        mut self,
-        tx: broadcast::Sender<AgentEvent>,
-    ) -> Self {
+    pub fn with_event_broadcaster(mut self, tx: broadcast::Sender<AgentEvent>) -> Self {
         self.event_broadcaster = Some(tx);
         self
     }

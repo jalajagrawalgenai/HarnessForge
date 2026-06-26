@@ -3,7 +3,9 @@ use axum::Json;
 use serde_json::{json, Value};
 
 pub async fn improve(Json(_body): Json<Value>) -> Json<Value> {
-    Json(json!({"status":"not_enough_data","message":"Meta-harness requires 20+ completed sessions","sessions_needed":20,"current_sessions":0}))
+    Json(
+        json!({"status":"not_enough_data","message":"Meta-harness requires 20+ completed sessions","sessions_needed":20,"current_sessions":0}),
+    )
 }
 pub async fn weaknesses() -> Json<Value> {
     Json(json!({"weaknesses":[],"total":0}))

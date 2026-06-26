@@ -13,17 +13,18 @@ pub async fn get_audit(
     let sessions = state.store.read().await;
     match sessions.get(&id) {
         Some(s) => {
-            let events: Vec<Value> = s.events.iter().map(|e| serde_json::to_value(e).unwrap_or(json!({}))).collect();
+            let events: Vec<Value> = s
+                .events
+                .iter()
+                .map(|e| serde_json::to_value(e).unwrap_or(json!({})))
+                .collect();
             Json(json!({"session_id":id,"events":events,"count":events.len(),"filters":params}))
         }
         None => Json(json!({"session_id":id,"events":[],"error":"session not found"})),
     }
 }
 
-pub async fn get_report(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn get_report(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     match sessions.get(&id) {
         Some(s) => Json(json!({
@@ -41,20 +42,21 @@ pub async fn export_audit(
     Path(id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Json<Value> {
-    let fmt = params.get("format").map(|s|s.as_str()).unwrap_or("json");
+    let fmt = params.get("format").map(|s| s.as_str()).unwrap_or("json");
     let sessions = state.store.read().await;
-    let count = sessions.get(&id).map(|s|s.events.len()).unwrap_or(0);
+    let count = sessions.get(&id).map(|s| s.events.len()).unwrap_or(0);
     Json(json!({"session_id":id,"format":fmt,"events":count,"exported":true}))
 }
 
-pub async fn replay(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn replay(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     match sessions.get(&id) {
         Some(s) => {
-            let events: Vec<Value> = s.events.iter().map(|e| serde_json::to_value(e).unwrap_or(json!({}))).collect();
+            let events: Vec<Value> = s
+                .events
+                .iter()
+                .map(|e| serde_json::to_value(e).unwrap_or(json!({})))
+                .collect();
             Json(json!({"session_id":id,"timeline":events,"bookmarks":[]}))
         }
         None => Json(json!({"error":"session not found"})),

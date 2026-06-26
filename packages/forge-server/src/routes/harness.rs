@@ -27,7 +27,9 @@ pub async fn get() -> Json<Value> {
 
 /// PUT /v1/harness — update harness configuration.
 pub async fn update(Json(body): Json<Value>) -> Json<Value> {
-    Json(json!({"updated":true,"config":body,"message":"Config updated (in-memory, persists until restart)"}))
+    Json(
+        json!({"updated":true,"config":body,"message":"Config updated (in-memory, persists until restart)"}),
+    )
 }
 
 /// GET /v1/harness/versions

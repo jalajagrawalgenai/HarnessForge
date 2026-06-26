@@ -23,11 +23,16 @@ pub async fn test_connection(Path(target): Path<String>) -> Json<Value> {
     Json(json!({"target":target,"connected":false,"message":"API key not configured"}))
 }
 pub async fn trigger_export(Json(body): Json<Value>) -> Json<Value> {
-    let session_id = body.get("session_id").and_then(|v|v.as_str()).unwrap_or("");
+    let session_id = body
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     Json(json!({"exported":session_id,"status":"queued"}))
 }
 pub async fn get_alert_config() -> Json<Value> {
-    Json(json!({"pagerduty":{"routing_key":"","enabled":false},"opsgenie":{"routing_key":"","enabled":false}}))
+    Json(
+        json!({"pagerduty":{"routing_key":"","enabled":false},"opsgenie":{"routing_key":"","enabled":false}}),
+    )
 }
 pub async fn update_alert_config(Json(body): Json<Value>) -> Json<Value> {
     Json(json!({"updated":true,"alert_config":body}))

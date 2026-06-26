@@ -68,10 +68,7 @@ pub async fn run_watch(session_id: &str) -> io::Result<()> {
     Ok(())
 }
 
-async fn run_app<B: Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut WatchApp,
-) -> io::Result<()> {
+async fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut WatchApp) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, app))?;
 
@@ -95,10 +92,7 @@ async fn run_app<B: Backend>(
 fn ui(f: &mut Frame, app: &WatchApp) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
+        .constraints([Constraint::Length(3), Constraint::Min(0)])
         .split(f.area());
 
     // Title bar

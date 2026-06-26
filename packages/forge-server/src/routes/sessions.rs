@@ -12,10 +12,7 @@ use std::sync::Arc;
 /// POST /v1/sessions
 /// Request: { "task": "...", "agent_type": "...", "preset": "..." }
 /// Creates a new session and spawns the harness in the background.
-pub async fn create(
-    State(state): State<Arc<AppState>>,
-    Json(body): Json<Value>,
-) -> Json<Value> {
+pub async fn create(State(state): State<Arc<AppState>>, Json(body): Json<Value>) -> Json<Value> {
     let task = body
         .get("task")
         .and_then(|v| v.as_str())
@@ -90,10 +87,7 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Json<Value> {
 }
 
 /// GET /v1/sessions/:id
-pub async fn get(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn get(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     match sessions.get(&id) {
         Some(s) => Json(json!({
@@ -113,10 +107,7 @@ pub async fn get(
 }
 
 /// DELETE /v1/sessions/:id
-pub async fn delete(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn delete(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let mut sessions = state.store.write().await;
     if let Some(session) = sessions.get(&id) {
         let _ = session.cancel_tx.send(true);
@@ -126,10 +117,7 @@ pub async fn delete(
 }
 
 /// POST /v1/sessions/:id/pause
-pub async fn pause(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn pause(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     match sessions.get(&id) {
         Some(session) => {
@@ -147,18 +135,13 @@ pub async fn pause(
 }
 
 /// POST /v1/sessions/:id/resume
-pub async fn resume(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn resume(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     match sessions.get(&id) {
-        Some(session) => {
-            match session.intervention_tx.try_send(Intervention::Resume) {
-                Ok(_) => Json(json!({"resumed": id, "status": "ok"})),
-                Err(_) => Json(json!({"resumed": id, "status": "channel_full"})),
-            }
-        }
+        Some(session) => match session.intervention_tx.try_send(Intervention::Resume) {
+            Ok(_) => Json(json!({"resumed": id, "status": "ok"})),
+            Err(_) => Json(json!({"resumed": id, "status": "channel_full"})),
+        },
         None => Json(json!({"error": "session not found"})),
     }
 }

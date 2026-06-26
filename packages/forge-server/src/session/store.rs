@@ -67,12 +67,7 @@ pub fn new_store() -> SharedSessionStore {
 
 impl SessionState {
     /// Create a new session state with fresh channels.
-    pub fn new(
-        id: String,
-        task: String,
-        agent_type: String,
-        preset: String,
-    ) -> Self {
+    pub fn new(id: String, task: String, agent_type: String, preset: String) -> Self {
         let (event_broadcaster, _) = broadcast::channel(256);
         let (intervention_tx, _intervention_rx) = mpsc::channel(64);
         let (cancel_tx, _cancel_rx) = watch::channel(false);

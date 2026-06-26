@@ -2,8 +2,7 @@ use axum::extract::Query;
 use axum::Json;
 use forge_compliance::{
     eu_ai_act_article_14_checklist, eu_ai_act_article_15_checklist,
-    generate_report as gen_compliance_report,
-    soc2_checklist, ComplianceFramework,
+    generate_report as gen_compliance_report, soc2_checklist, ComplianceFramework,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};

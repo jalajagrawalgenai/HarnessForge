@@ -19,13 +19,20 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
         if let Message::Text(text) = msg {
             if let Ok(cmd) = serde_json::from_str::<Value>(&text) {
                 let action = cmd.get("action").and_then(|v| v.as_str());
-                let session_id = cmd.get("session_id").and_then(|v| v.as_str()).map(String::from);
+                let session_id = cmd
+                    .get("session_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
 
                 match (action, session_id) {
                     (Some("subscribe"), Some(sid)) => {
-                        let _ = socket.send(Message::Text(
-                            json!({"event":"subscribed","session_id":sid}).to_string().into()
-                        )).await;
+                        let _ = socket
+                            .send(Message::Text(
+                                json!({"event":"subscribed","session_id":sid})
+                                    .to_string()
+                                    .into(),
+                            ))
+                            .await;
 
                         let mut rx = {
                             let sessions = state.store.read().await;

@@ -40,8 +40,7 @@ pub async fn spawn_session(
             .get(&session_id)
             .map(|s| s.event_broadcaster.clone());
         match broadcaster {
-            Some(tx) => Pipeline::new(Arc::new(registry), false)
-                .with_event_broadcaster(tx),
+            Some(tx) => Pipeline::new(Arc::new(registry), false).with_event_broadcaster(tx),
             None => Pipeline::new(Arc::new(registry), false),
         }
     };
@@ -81,11 +80,9 @@ pub async fn spawn_session(
                     s.result = Some(forge_sdk::harness::HarnessRunResult {
                         agent_id: session_result.agent_id,
                         observation_count: session_result.pipeline_stats.cycles as u64,
-                        detection_count: session_result.pipeline_stats.total_detections
+                        detection_count: session_result.pipeline_stats.total_detections as u64,
+                        intervention_count: session_result.pipeline_stats.total_interventions
                             as u64,
-                        intervention_count: session_result
-                            .pipeline_stats
-                            .total_interventions as u64,
                         success: session_result.outcome.success,
                     });
                 }

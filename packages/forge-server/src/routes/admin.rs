@@ -14,18 +14,28 @@ pub async fn list_keys() -> Json<Value> {
 }
 
 pub async fn create_key(Json(body): Json<Value>) -> Json<Value> {
-    let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("default");
+    let name = body
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
     let scopes: Vec<String> = body
         .get("scopes")
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
     let key = format!("fk_{}", uuid::Uuid::new_v4().to_string().replace('-', ""));
     let key_data = json!({
         "name": name, "key": key, "scopes": scopes,
         "created_at": chrono::Utc::now().to_rfc3339()
     });
-    API_KEYS.lock().unwrap().insert(key.clone(), key_data.clone());
+    API_KEYS
+        .lock()
+        .unwrap()
+        .insert(key.clone(), key_data.clone());
     Json(json!({"key": key_data, "created": true}))
 }
 
