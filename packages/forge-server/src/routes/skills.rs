@@ -28,7 +28,7 @@ pub async fn compose(Json(body): Json<Value>) -> Json<Value> {
     if skills.is_empty() {
         return Json(json!({"error":"no valid skills found"}));
     }
-    let skill_refs: Vec<&forge_skills::registry::Skill> = skills.iter().copied().collect();
+    let skill_refs = skills.to_vec();
     let composed = SkillComposer::compose(&skill_refs);
     Json(json!({"preset":composed.preset,"observers":composed.observers,"detectors":composed.detectors,"strategies":composed.strategies}))
 }
