@@ -282,11 +282,30 @@ pub fn create_app(store: SharedSessionStore) -> Router {
         .with_state(state)
 }
 
-pub async fn run_server(port: u16) {
+pub async fn run_server(start_port: u16) {
     let store = session::store::new_store();
     let app = create_app(store);
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-    tracing::info!("Forge server starting on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+    // Try ports starting from start_port, find the first available one
+    let mut port = start_port;
+    let listener = loop {
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => break listener,
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                tracing::warn!("Port {} is in use, trying port {}...", port, port + 1);
+                port += 1;
+                if port > start_port + 100 {
+                    panic!("No free port found between {} and {}", start_port, port);
+                }
+            }
+            Err(e) => panic!("Failed to bind to port {}: {}", port, e),
+        }
+    };
+
+    let addr = listener.local_addr().unwrap();
+    tracing::info!("Forge server started on http://{}", addr);
+    tracing::info!("Dashboard: http://{}", addr);
+
     axum::serve(listener, app).await.unwrap();
 }
