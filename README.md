@@ -588,20 +588,26 @@ twine upload target/wheels/forge_sdk-*.whl
 - [x] Real AgentAdapters for ALL 31 agent types (`packages/forge-adapters/`)
 - [x] AdapterFactory — auto-maps AgentType → CliAgent/HttpAgent/PythonAgent/BridgeAgent
 - [x] 130 tests, 0 failures
+- [x] SSO/SAML/OIDC auth (`forge-auth` — Okta, Azure AD, Google Workspace, RBAC)
+- [x] EU AI Act compliance packs (`forge-compliance` — Art.14/15, SOC 2, GDPR)
+- [x] LangFuse / W&B Weave / OpenTelemetry export (`forge-export`)
+- [x] PagerDuty / OpsGenie alerting (`forge-export::alerting`)
+- [x] Plugin marketplace client (`forge-marketplace` — browse, install, publish)
+- [x] VSCode extension (`forge-vscode` — sidebar, 6 commands, TreeViews)
+- [x] Kubernetes operator CRDs + Helm chart (`deploy/k8s/`)
 
 ### 🚧 In Progress
 - [ ] TypeScript bindings (NAPI-RS)
 - [ ] CLI TUI (`forge watch` with ratatui)
 - [ ] forge-server route wiring to real SDK
+- [ ] Plugin marketplace registry server (client is done)
 
-### 📋 Planned
-- [ ] VSCode extension
-- [ ] Kubernetes operator + Helm chart
-- [ ] Plugin marketplace (community registry)
-- [ ] SSO/SAML/OIDC (Okta, Azure AD, Google Workspace)
-- [ ] EU AI Act compliance report templates
-- [ ] LangFuse / W&B Weave native export
-- [ ] PagerDuty / OpsGenie integration
+### 📋 Future
+- [ ] Docker Compose quickstart
+- [ ] GitHub Action for CI (`forgelabs/forge-action`)
+- [ ] Performance profiler (`forge profile`)
+- [ ] Interactive debugger (`forge debug`)
+- [ ] Carbon footprint tracking
 
 ---
 
