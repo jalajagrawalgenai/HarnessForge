@@ -245,7 +245,7 @@ impl AgentAdapter for CliAgent {
                 tool: self.config.command.clone(),
                 args: serde_json::json!({"task": task}),
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         let _ = event_tx
@@ -263,7 +263,7 @@ impl AgentAdapter for CliAgent {
                     token_count: (stdout.len() / 4) as u64, // rough estimate: 4 chars ≈ 1 token
                 },
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         // 6. Check for interventions after execution
@@ -274,7 +274,7 @@ impl AgentAdapter for CliAgent {
             .send(AgentEvent::ThinkingEnd {
                 agent_id: self.id.clone(),
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         // 8. Signal completion
@@ -283,7 +283,7 @@ impl AgentAdapter for CliAgent {
                 agent_id: self.id.clone(),
                 summary: stdout.chars().take(300).collect(),
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         Ok(AgentOutcome {

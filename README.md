@@ -533,31 +533,71 @@ cargo test -p forge-audit
 
 ---
 
-## Publishing to PyPI
+## Using Forge with Claude Code
 
-### Automated CI (Push a Tag)
+### How It Works
 
-The `.github/workflows/publish-pypi.yml` workflow builds wheels for:
-- **3 OSes:** Ubuntu, Windows, macOS
-- **5 Python versions:** 3.10, 3.11, 3.12, 3.13, 3.14
+Forge wraps around Claude Code (or any AI agent) and watches every move:
 
-```bash
-# Bump version in both files, then:
-git add -A && git commit -m "Release v0.1.4"
-git tag v0.1.4
-git push origin main && git push origin v0.1.4
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    FORGE HARNESS                              │
+│                                                               │
+│  Claude Code ──→ Forge watches ──→ Detects issues ──→ Fixes │
+│       ↑                                            │          │
+│       │        12 observers watch                   │          │
+│       │        16 detectors scan     14 strategies  ↓          │
+│       │                                            │          │
+│       └──────── interventions (nudge, compact...) ─┘          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-CI builds 15 wheels and publishes to PyPI automatically.
-
-### Manual Build
+### Quick Test (Python)
 
 ```bash
-cd packages/forge-py
-pip install maturin twine
-maturin build --release
-twine upload target/wheels/forge_sdk-*.whl
+# Install
+pip install forge-agent-sdk
+
+# Run Claude Code through the Forge harness
+python -c "
+from forge_sdk import create_harness
+
+# Create a harness tuned for Claude Code
+harness = create_harness(preset='claude-code')
+
+# Run your task — Forge watches every turn
+result = harness.run('Write a Python script to analyze log files')
+
+print(f'Success: {result.success}')
+print(f'Observations: {result.observation_count}')
+print(f'Detections: {result.detection_count}')  
+print(f'Interventions: {result.intervention_count}')
+"
 ```
+
+### Full Integration (Rust)
+
+```bash
+# Clone and build
+git clone https://github.com/jalajagrawalgenai/HarnessForge.git
+cd HarnessForge
+cargo build --release
+
+# Run with Claude Code preset
+cargo run -p forge-cli -- run --preset claude-code "Refactor the auth module"
+
+# Or wrap your own Claude-powered agent
+cargo run -p forge-example-basic-agent
+```
+
+### What Forge Catches
+
+When Claude Code runs through Forge, it catches things like:
+- **Re-reading the same file** → StaleContext detection → auto-compacts context
+- **Getting stuck in a loop** → Loop detection → nudges to break the cycle
+- **Skipping tests** → AccuracyRisk detection → nudges to run tests
+- **Context filling up** → Context pressure detection → compresses before overflow
+- **Accidental secret leak** → Secret leak detection → circuit breaks immediately
 
 ---
 

@@ -255,7 +255,7 @@ impl AgentAdapter for PythonAgent {
                 "success": !is_error,
                 "output": stdout,
                 "stderr": stderr,
-            )));
+            }));
 
         let result_success = parsed["success"].as_bool().unwrap_or(!is_error);
         let result_output = parsed["output"].as_str().unwrap_or(&stdout).to_string();
@@ -268,7 +268,7 @@ impl AgentAdapter for PythonAgent {
                 tool: tool_name.clone(),
                 args: serde_json::json!({"task": task}),
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         let _ = event_tx
@@ -282,7 +282,7 @@ impl AgentAdapter for PythonAgent {
                     token_count: (stdout.len() / 4) as u64,
                 },
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         self.handle_interventions(&mut intervention_rx)?;
@@ -292,7 +292,7 @@ impl AgentAdapter for PythonAgent {
             .send(AgentEvent::ThinkingEnd {
                 agent_id: self.id.clone(),
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         // 6. Completed

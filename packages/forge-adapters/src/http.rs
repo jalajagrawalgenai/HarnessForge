@@ -261,7 +261,7 @@ impl HttpAgent {
         while let Ok(intervention) = rx.try_recv() {
             match intervention {
                 Intervention::CircuitBreak { reason } => {
-                    return Err(ForgeError::CircuitBroken { reason ));
+                    return Err(ForgeError::CircuitBroken { reason });
                 }
                 Intervention::Pause { reason, .. } => {
                     tracing::warn!(agent_id = %self.id, reason = %reason, "Paused by harness");
@@ -319,7 +319,7 @@ impl AgentAdapter for HttpAgent {
 
         let response = self.client.execute(req).await.map_err(|e| {
             ForgeError::ToolExecution(
-                format!("HTTP request failed: {}", e)))
+                format!("HTTP request failed: {}", e))
         })?;
 
         let status = response.status();
@@ -347,7 +347,7 @@ impl AgentAdapter for HttpAgent {
                 tool: self.config.model.clone(),
                 args: serde_json::json!({"format": format!("{:?}", self.config.format), "task": task}),
                 timestamp: Utc::now(),
-            ))
+            })
             .await;
 
         // 6. Tool call end
