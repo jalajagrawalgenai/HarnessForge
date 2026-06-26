@@ -579,17 +579,17 @@ twine upload target/wheels/forge_sdk-*.whl
 - [x] MCP client/server/gateway modules
 - [x] Skills registry + composer
 - [x] Cloud traits (AWS, Azure, GCP)
-- [x] Python bindings — `pip install forge-agent-sdk`
+- [x] Python bindings — `pip install forge-agent-sdk` (31 presets, Python 3.10–3.14)
 - [x] Working Rust example (`examples/basic-agent/`)
+- [x] Docker image (multi-stage Dockerfile)
+- [x] Dashboard scaffold (Leptos WASM, `forge-dashboard`)
+- [x] CI/CD workflow (`.github/workflows/publish-pypi.yml` — builds 15 wheels on tag push)
 - [x] 130 tests, 0 failures
 
 ### 🚧 In Progress
 - [ ] Real AgentAdapter for Claude API (currently MockAgent only)
 - [ ] TypeScript bindings (NAPI-RS)
 - [ ] CLI TUI (`forge watch` with ratatui)
-- [ ] Dashboard (Leptos WASM)
-- [ ] Docker image
-- [ ] CI integration (GitHub Action)
 
 ### 📋 Planned
 - [ ] VSCode extension
