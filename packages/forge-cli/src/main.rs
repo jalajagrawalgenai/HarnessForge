@@ -125,7 +125,10 @@ async fn main() {
         Commands::Watch { session_id } => {
             let sid = session_id.unwrap_or_else(|| "latest".into());
             println!("🔍 Forge Watch — session: {sid}");
-            println!("(Full TUI requires ratatui rendering — use 'forge serve' for dashboard)");
+            match forge_cli::render::watch::run_watch(&sid).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Watch error: {e}"),
+            }
         }
         Commands::Replay { session_id } => {
             println!("⏪ Replaying session: {session_id}");
@@ -146,10 +149,10 @@ async fn main() {
             cmd_improve(&at).await;
         }
         Commands::Serve { port } => {
-            println!("🌐 Starting Forge server on http://localhost:{port}");
-            println!(
-                "(Server requires forge-server crate — use 'cargo run -p forge-server' directly)"
-            );
+            println!("🚀 Starting Forge server on http://localhost:{port}");
+            println!("📊 Dashboard: http://localhost:{port}");
+            println!("Press Ctrl+C to stop");
+            forge_server::run_server(port).await;
         }
         Commands::Doctor => {
             cmd_doctor();

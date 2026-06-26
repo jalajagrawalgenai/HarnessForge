@@ -15,6 +15,7 @@ theme:
     - search.highlight
 nav:
   - Home: index.md
+  - Dashboard: dashboard.md
   - Getting Started:
       - Quickstart: getting-started/quickstart.md
       - Installation: getting-started/installation.md
@@ -37,6 +38,8 @@ nav:
       - Audit Trail: concepts/audit-trail.md
       - Self-Improvement: concepts/self-improvement.md
   - API Reference:
+      - REST API: api/rest-api.md
+      - WebSocket API: api/websocket.md
       - forge-sdk: api/forge-sdk.md
       - forge-harness: api/forge-harness.md
       - forge-observers: api/forge-observers.md

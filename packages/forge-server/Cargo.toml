@@ -10,14 +10,27 @@ forge-sdk = { path = "../forge-sdk" }
 forge-harness = { path = "../forge-harness" }
 forge-audit = { path = "../forge-audit" }
 forge-meta = { path = "../forge-meta" }
-axum = { workspace = true }
+forge-compliance = { path = "../forge-compliance" }
+forge-mcp = { path = "../forge-mcp" }
+forge-skills = { path = "../forge-skills" }
+forge-auth = { path = "../forge-auth" }
+forge-export = { path = "../forge-export" }
+forge-marketplace = { path = "../forge-marketplace" }
+forge-cloud = { path = "../forge-cloud" }
+axum = { workspace = true, features = ["ws", "macros"] }
 tower = { workspace = true }
-tower-http = { workspace = true }
+tower-http = { workspace = true, features = ["fs", "cors"] }
 tokio = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
-sqlx = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+http = "1"

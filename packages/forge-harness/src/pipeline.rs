@@ -7,6 +7,7 @@ use forge_sdk::types::detection::DetectedIssue;
 use forge_sdk::types::strategy::StrategyResult;
 use std::sync::Arc;
 use std::time::Instant;
+use tokio::sync::broadcast;
 
 use crate::event_bus::EventBus;
 use crate::human_gate::HumanGate;
@@ -30,6 +31,7 @@ pub struct Pipeline {
     dry_run: bool,
     audit_store: Option<Arc<dyn AuditStore>>,
     human_gate: Option<HumanGate>,
+    event_broadcaster: Option<broadcast::Sender<AgentEvent>>,
 }
 
 impl Pipeline {
@@ -41,6 +43,7 @@ impl Pipeline {
             dry_run,
             audit_store: None,
             human_gate: None,
+            event_broadcaster: None,
         }
     }
 
@@ -53,6 +56,16 @@ impl Pipeline {
     /// Attach a human gate for pausing on critical detections.
     pub fn with_human_gate(mut self, gate: HumanGate) -> Self {
         self.human_gate = Some(gate);
+        self
+    }
+
+    /// Attach a broadcast sender for forwarding events to external consumers
+    /// (e.g., WebSocket/SSE for live dashboards).
+    pub fn with_event_broadcaster(
+        mut self,
+        tx: broadcast::Sender<AgentEvent>,
+    ) -> Self {
+        self.event_broadcaster = Some(tx);
         self
     }
 
@@ -234,6 +247,10 @@ impl Pipeline {
     /// Feed events into the pipeline bus
     pub fn feed(&mut self, event: &AgentEvent) {
         self.bus.dispatch(event);
+        // Forward to external broadcast channel (WebSocket/SSE consumers)
+        if let Some(ref tx) = self.event_broadcaster {
+            let _ = tx.send(event.clone());
+        }
     }
 
     pub fn feed_batch(&mut self, events: &[AgentEvent]) {

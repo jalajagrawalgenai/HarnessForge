@@ -31,6 +31,50 @@ LangSmith: "Session failed"            Checkpoints before failure,
 
 ---
 
+## 🚀 The UI-Driven Way (Recommended)
+
+**Install once. Everything through the dashboard. No terminal commands needed.**
+
+```bash
+pip install forge-agent-sdk    # Install
+forge serve                     # Start the dashboard
+# Opens http://localhost:3000 → type task, click Run, watch live
+```
+
+The dashboard gives you all 15 features through a web UI:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  Forge Dashboard                                            │
+│                                                             │
+│  [Run] [Sessions] [Live] [Audit] [Compliance] [Skills]     │
+│  [MCP] [Export] [Marketplace] [Cloud] [Analytics] [Meta]   │
+│  [Auth] [Admin] [Settings]                                  │
+│                                                             │
+│  ┌─ Run Agent ──────────────────────────────────────────┐  │
+│  │  Task: [Build a REST API with JWT auth and Swagger]   │  │
+│  │  Agent: [Claude Code ▼]   Preset: [Claude Code ▼]     │  │
+│  │  Detectors: ☑ All 16    Strategies: ☑ All 14          │  │
+│  │  [▶ Run with Harness]  [👁 Dry Run]                   │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌─ Live ───────────────────────────────────────────────┐  │
+│  │  Agent: "Analyzing auth module..."                     │  │
+│  │  ⚠ HARNESS: Stale context. Compact 87%→58%.           │  │
+│  │  🔧 HARNESS: Accuracy risk. Nudge: "Run tests."       │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  Health: 🟢Token 🟢Latency 🟢Cost 🟡Context 🟢Security     │
+└────────────────────────────────────────────────────────────┘
+```
+
+- **15 pages** — Run, Sessions, Live, Audit, Compliance, Skills, MCP, Export, Marketplace, Cloud, Analytics, Meta, Auth, Admin, Settings
+- **50+ API endpoints** — every Forge feature exposed via REST + WebSocket + SSE
+- **Real-time streaming** — live events, health gauges, intervention log
+- **Zero config** — all 31 agent types, 16 detectors, 14 strategies available from the UI
+
+---
+
 # Python — Quick Start
 
 ### Step 1: Install
@@ -41,7 +85,20 @@ pip install forge-agent-sdk
 
 Requirements: Python 3.10+ (including 3.14). Works on Windows, macOS, and Linux.
 
-### Step 2: Run Your First Harnessed Agent
+### Step 2: Launch the Dashboard
+
+```bash
+forge serve
+# Opens http://localhost:3000 — Forge Dashboard
+```
+
+### Step 3: Type a task, select your agent, click Run
+
+The dashboard handles everything: harness config, live monitoring, audit reports, compliance checks, MCP management, plugin marketplace, cloud deployment, and analytics.
+
+Or use Python programmatically:
+
+### Step 2 (alt): Run Your First Harnessed Agent
 
 ```python
 from forge_sdk import quick_run, list_presets, list_detectors

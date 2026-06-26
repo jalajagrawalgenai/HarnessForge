@@ -1,6 +1,15 @@
 pub mod admin;
 pub mod analytics;
 pub mod audit;
+pub mod auth;
+pub mod cloud;
+pub mod compliance;
+pub mod export_routes;
 pub mod harness;
+pub mod health;
+pub mod marketplace;
+pub mod mcp_routes;
 pub mod meta;
 pub mod sessions;
+pub mod skills;
+pub mod stream;

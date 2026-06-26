@@ -192,7 +192,7 @@ impl Harness {
 
 // ─── HarnessRunResult ─────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct HarnessRunResult {
     pub agent_id: String,
     pub observation_count: u64,

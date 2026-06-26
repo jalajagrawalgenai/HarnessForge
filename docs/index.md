@@ -2,15 +2,35 @@
 
 **Self-improving harness that watches, detects, and intervenes for ANY AI agent.**
 
-Forge wraps around your existing agents (LangGraph, CrewAI, AutoGen, raw Claude API) and adds:
+Forge wraps around your existing agents (LangGraph, CrewAI, AutoGen, Claude Code, raw APIs) and adds:
 
 - **12-dimensional observation** — token, latency, cost, accuracy, security, and more
 - **16 real-time detectors** — loop, stale context, secret leak, hallucination, deadlock...
 - **14 autonomous interventions** — nudge, compact, pause, escalate, circuit break...
 - **Immutable audit trail** — hash-chain integrity, full-text search, session replay
 - **Self-improving meta-harness** — mines weaknesses, proposes edits, validates improvements
+- **Full featured Dashboard** — UI-driven with 15 pages, 50+ API endpoints, WebSocket live streaming
 
-## Quick Start
+## 🚀 Quick Start — The UI Way
+
+```bash
+pip install forge-agent-sdk    # One install
+forge serve                     # Start dashboard
+# Open http://localhost:3000    # Type task → Click Run → Watch live
+```
+
+The dashboard is the primary interface for Forge. Everything is UI-driven:
+- **Run agents** with any of 31 presets (Claude Code, LangGraph, CrewAI, AutoGen, etc.)
+- **Live monitoring** with real-time health gauges, conversation stream, intervention log
+- **Compliance reports** — EU AI Act, SOC 2, ISO 27001, GDPR, HIPAA, PCI DSS
+- **MCP management** — configure servers, discover local, start gateway
+- **Skills browser** — built-in skills (security-first, cost-optimizer, accuracy-max)
+- **Plugin marketplace** — search, install, publish community plugins
+- **Cloud deployment** — AWS, Azure, GCP with one click
+- **Analytics** — tokens, costs, interventions, health trends
+- **Admin** — API keys, quotas, SSO configuration
+
+## 🦀 Rust SDK
 
 ```rust
 use forge_sdk::prelude::*;
@@ -29,6 +49,18 @@ let session = harness.run("Implement JWT auth system").await?;
 println!("{}", session.audit_report());
 ```
 
+## 🐍 Python SDK
+
+```python
+from forge_sdk import create_harness
+
+harness = create_harness(preset="claude-code")
+result = harness.run("Write a function to validate email addresses")
+print(f"Success: {result.success}")
+print(f"Detections: {result.detection_count}")
+print(f"Interventions: {result.intervention_count}")
+```
+
 ## Why Forge?
 
 | Without Forge | With Forge |
@@ -39,10 +71,33 @@ println!("{}", session.audit_report());
 | Agent hallucinates files | Hallucination detected → nudge → agent corrects |
 | Cost spikes 10x | Cost anomaly detected → model swapped → savings |
 
+## CLI Commands
+
+```bash
+forge serve           # Start dashboard + API server
+forge run <task>      # Run agent through harness (CLI)
+forge watch <id>      # Live TUI session viewer
+forge explain <id>    # Human-readable audit report
+forge init            # Scaffold new Forge project
+forge doctor          # Check system dependencies
+forge bench           # Run benchmark suite
+forge improve         # Run meta-harness improvement
+forge validate        # Validate harness config
+```
+
 ## Installation
 
 ```bash
+# Python (Recommended)
+pip install forge-agent-sdk
+
+# Rust
 cargo install forge-sdk
+
+# From source
+git clone https://github.com/jalajagrawalgenai/HarnessForge.git
+cd HarnessForge
+cargo build --release
 ```
 
 ## License

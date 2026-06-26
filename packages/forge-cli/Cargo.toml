@@ -9,6 +9,7 @@ description = "Forge CLI — terminal interface for the agent harness"
 forge-sdk = { path = "../forge-sdk" }
 forge-harness = { path = "../forge-harness" }
 forge-audit = { path = "../forge-audit" }
+forge-server = { path = "../forge-server" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
