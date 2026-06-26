@@ -152,10 +152,7 @@ pub struct ComplianceCheckResult {
 }
 
 /// Generate a compliance report template for a framework.
-pub fn generate_report(
-    framework: ComplianceFramework,
-    session_id: &str,
-) -> ComplianceReport {
+pub fn generate_report(framework: ComplianceFramework, session_id: &str) -> ComplianceReport {
     let checks: Vec<ComplianceCheckResult> = match framework {
         ComplianceFramework::EuAiAct => {
             let mut c = eu_ai_act_article_14_checklist();
@@ -164,7 +161,9 @@ pub fn generate_report(
                 .map(|check| ComplianceCheckResult {
                     passed: check.auto_detectable,
                     check,
-                    evidence: Some("Forge audit trail automatically captures this evidence.".into()),
+                    evidence: Some(
+                        "Forge audit trail automatically captures this evidence.".into(),
+                    ),
                     auditor_notes: None,
                 })
                 .collect()
@@ -217,7 +216,7 @@ mod tests {
     fn test_generate_eu_ai_act_report() {
         let report = generate_report(ComplianceFramework::EuAiAct, "test-session");
         assert_eq!(report.checks.len(), 8); // 4 (Art.14) + 4 (Art.15)
-        // 7 of 8 checks are auto-detectable; A14.4 (training) requires human review
+                                            // 7 of 8 checks are auto-detectable; A14.4 (training) requires human review
         let passed = report.checks.iter().filter(|c| c.passed).count();
         assert_eq!(passed, 7);
         // Overall fails because training (A14.4) is not auto-detectable

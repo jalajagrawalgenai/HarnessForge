@@ -70,10 +70,7 @@ impl AdapterFactory {
             }
 
             // ─── HTTP API agents ───
-            AgentType::Solo
-            | AgentType::PydanticAI
-            | AgentType::BeeAgent
-            | AgentType::Custom => {
+            AgentType::Solo | AgentType::PydanticAI | AgentType::BeeAgent | AgentType::Custom => {
                 let mut agent = HttpAgent::new(id, agent_type);
                 if let Some(ref key) = config.api_key {
                     agent = agent.api_key(key.clone());
@@ -146,10 +143,9 @@ impl AdapterFactory {
             AgentType::ClaudeCode | AgentType::Aider | AgentType::Cline | AgentType::Continue => {
                 "CliAgent (subprocess)"
             }
-            AgentType::Solo
-            | AgentType::PydanticAI
-            | AgentType::BeeAgent
-            | AgentType::Custom => "HttpAgent (API)",
+            AgentType::Solo | AgentType::PydanticAI | AgentType::BeeAgent | AgentType::Custom => {
+                "HttpAgent (API)"
+            }
             AgentType::LangGraph
             | AgentType::CrewAI
             | AgentType::AutoGen
@@ -181,15 +177,40 @@ impl AdapterFactory {
         use AgentType::*;
         let all = [
             // CLI
-            ClaudeCode, Aider, Cline, Continue,
+            ClaudeCode,
+            Aider,
+            Cline,
+            Continue,
             // HTTP API
-            Solo, BeeAgent, PydanticAI, Custom,
+            Solo,
+            BeeAgent,
+            PydanticAI,
+            Custom,
             // Python
-            LangGraph, CrewAI, AutoGen, LangChain, OpenAISwarm, SemanticKernel,
-            Haystack, DSPy, LlamaIndex, TaskWeaver, Agno, AtomicAgents,
+            LangGraph,
+            CrewAI,
+            AutoGen,
+            LangChain,
+            OpenAISwarm,
+            SemanticKernel,
+            Haystack,
+            DSPy,
+            LlamaIndex,
+            TaskWeaver,
+            Agno,
+            AtomicAgents,
             // Bridge
-            Copilot, Cursor, Windsurf, Devin, AmazonQ, ReplitAgent,
-            PearAI, BoltNew, Lovable, V0, VercelAI,
+            Copilot,
+            Cursor,
+            Windsurf,
+            Devin,
+            AmazonQ,
+            ReplitAgent,
+            PearAI,
+            BoltNew,
+            Lovable,
+            V0,
+            VercelAI,
         ];
         all.into_iter()
             .map(|at| (at, Self::adapter_name(at)))

@@ -66,7 +66,11 @@ impl MarketplaceClient {
     }
 
     /// Search for plugins.
-    pub async fn search(&self, query: &str, plugin_type: Option<PluginType>) -> Result<Vec<Plugin>, MarketplaceError> {
+    pub async fn search(
+        &self,
+        query: &str,
+        plugin_type: Option<PluginType>,
+    ) -> Result<Vec<Plugin>, MarketplaceError> {
         let url = format!("{}/api/v1/plugins/search", self.registry_url);
         let mut params = vec![("q", query.to_string())];
         if let Some(pt) = plugin_type {
@@ -92,7 +96,10 @@ impl MarketplaceClient {
     /// Install a plugin from the marketplace.
     pub async fn install(&self, name: &str, version: Option<&str>) -> Result<(), MarketplaceError> {
         let version = version.unwrap_or("latest");
-        let url = format!("{}/api/v1/plugins/{}/versions/{}/download", self.registry_url, name, version);
+        let url = format!(
+            "{}/api/v1/plugins/{}/versions/{}/download",
+            self.registry_url, name, version
+        );
         let _resp = self.client.get(&url).send().await?;
         Ok(())
     }

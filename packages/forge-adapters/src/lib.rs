@@ -19,15 +19,15 @@
 //! let mut agent = AdapterFactory::create(AgentType::Copilot, "my-agent", None);
 //! ```
 
+pub mod bridge;
 pub mod cli;
+pub mod factory;
 pub mod http;
 pub mod python;
-pub mod bridge;
-pub mod factory;
 
-pub use cli::CliAgent;
-pub use http::HttpAgent;
-pub use http::ApiFormat;
-pub use python::PythonAgent;
 pub use bridge::BridgeAgent;
+pub use cli::CliAgent;
 pub use factory::AdapterFactory;
+pub use http::ApiFormat;
+pub use http::HttpAgent;
+pub use python::PythonAgent;

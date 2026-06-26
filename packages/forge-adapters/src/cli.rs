@@ -214,23 +214,29 @@ impl AgentAdapter for CliAgent {
         let mut cmd = self.build_command(task);
 
         let output = if let Some(timeout_secs) = self.config.timeout_secs {
-            let child = cmd.spawn().map_err(|e| ForgeError::ToolExecution(
-                format!("Failed to spawn {}: {}", self.config.command, e)))?;
+            let child = cmd.spawn().map_err(|e| {
+                ForgeError::ToolExecution(format!("Failed to spawn {}: {}", self.config.command, e))
+            })?;
 
-            let output =
-                tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), child.wait_with_output())
-                    .await
-                    .map_err(|_| ForgeError::ToolExecution(
-                        format!(
-                            "{} timed out after {} seconds",
-                            self.config.command, timeout_secs
-                        )))?
-                    .map_err(|e| ForgeError::ToolExecution(
-                        format!("{} process error: {}", self.config.command, e)))?;
+            let output = tokio::time::timeout(
+                std::time::Duration::from_secs(timeout_secs),
+                child.wait_with_output(),
+            )
+            .await
+            .map_err(|_| {
+                ForgeError::ToolExecution(format!(
+                    "{} timed out after {} seconds",
+                    self.config.command, timeout_secs
+                ))
+            })?
+            .map_err(|e| {
+                ForgeError::ToolExecution(format!("{} process error: {}", self.config.command, e))
+            })?;
             output
         } else {
-            cmd.output().await.map_err(|e| ForgeError::ToolExecution(
-                format!("Failed to run {}: {}", self.config.command, e)))?
+            cmd.output().await.map_err(|e| {
+                ForgeError::ToolExecution(format!("Failed to run {}: {}", self.config.command, e))
+            })?
         };
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -294,13 +300,16 @@ impl AgentAdapter for CliAgent {
                 duration_ms,
                 stdout.len()
             ),
-            output: Some(serde_json::json!({
-                "command": self.config.command,
-                "duration_ms": duration_ms,
-                "exit_code": output.status.code(),
-                "stdout_len": stdout.len(),
-                "stderr_len": stderr.len(),
-            }).to_string()),
+            output: Some(
+                serde_json::json!({
+                    "command": self.config.command,
+                    "duration_ms": duration_ms,
+                    "exit_code": output.status.code(),
+                    "stdout_len": stdout.len(),
+                    "stderr_len": stderr.len(),
+                })
+                .to_string(),
+            ),
         })
     }
 }
@@ -338,7 +347,10 @@ mod tests {
         assert_eq!(agent.config.command, "my-cli");
         assert_eq!(agent.config.default_args, vec!["--run", "--json"]);
         assert_eq!(agent.config.work_dir, "/tmp/project");
-        assert_eq!(agent.config.env, vec![("API_KEY".into(), "test-key".into())]);
+        assert_eq!(
+            agent.config.env,
+            vec![("API_KEY".into(), "test-key".into())]
+        );
         assert_eq!(agent.config.timeout_secs, Some(60));
     }
 }

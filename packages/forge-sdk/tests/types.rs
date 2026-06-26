@@ -1,6 +1,4 @@
-use forge_sdk::events::{
-    AgentEvent, CompressionLayer, DegradeLevel, Intervention, IsolationLevel,
-};
+use forge_sdk::events::{AgentEvent, CompressionLayer, DegradeLevel, Intervention, IsolationLevel};
 use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
 use forge_sdk::types::health::{HealthDimensions, HealthScore, HealthTrend};
 use forge_sdk::types::token::{TokenBudget, TokenCount};

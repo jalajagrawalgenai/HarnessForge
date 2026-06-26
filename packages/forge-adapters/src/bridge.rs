@@ -143,10 +143,7 @@ impl BridgeAgent {
 
     /// Push an intervention to the remote agent via callback URL.
     #[allow(dead_code)]
-    async fn push_intervention(
-        &self,
-        intervention: &Intervention,
-    ) -> Result<(), ForgeError> {
+    async fn push_intervention(&self, intervention: &Intervention) -> Result<(), ForgeError> {
         if let Some(ref callback_url) = self.config.callback_url {
             let client = reqwest::Client::new();
             let payload = match intervention {
@@ -286,11 +283,7 @@ impl AgentAdapter for BridgeAgent {
                 agent_id: self.id.clone(),
                 tool: tool_name,
                 result: ToolResult {
-                    content: format!(
-                        "Bridge session {}: {} completed",
-                        self.id,
-                        self.agent_type
-                    ),
+                    content: format!("Bridge session {}: {} completed", self.id, self.agent_type),
                     is_error: self.status == BridgeSessionStatus::Failed,
                     duration_ms,
                     token_count: 0,
@@ -323,12 +316,15 @@ impl AgentAdapter for BridgeAgent {
                 "Bridge agent {} completed ({}ms). Remote agent session tracked.",
                 self.agent_type, duration_ms
             ),
-            output: Some(serde_json::json!({
-                "agent_type": self.agent_type.to_string(),
-                "bridge_mode": "poll",
-                "duration_ms": duration_ms,
-                "events_collected": self.events.len(),
-            }).to_string()),
+            output: Some(
+                serde_json::json!({
+                    "agent_type": self.agent_type.to_string(),
+                    "bridge_mode": "poll",
+                    "duration_ms": duration_ms,
+                    "events_collected": self.events.len(),
+                })
+                .to_string(),
+            ),
         })
     }
 }

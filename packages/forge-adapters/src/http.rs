@@ -67,12 +67,16 @@ impl HttpAgent {
     /// Create a new HttpAgent.
     pub fn new(id: impl Into<String>, agent_type: AgentType) -> Self {
         let (base_url, format, model) = match agent_type {
-            AgentType::Solo | AgentType::PydanticAI | AgentType::BeeAgent => {
-                ("https://api.anthropic.com".into(), ApiFormat::Anthropic, "claude-sonnet-4-6".into())
-            }
-            _ => {
-                ("https://api.anthropic.com".into(), ApiFormat::Anthropic, "claude-sonnet-4-6".into())
-            }
+            AgentType::Solo | AgentType::PydanticAI | AgentType::BeeAgent => (
+                "https://api.anthropic.com".into(),
+                ApiFormat::Anthropic,
+                "claude-sonnet-4-6".into(),
+            ),
+            _ => (
+                "https://api.anthropic.com".into(),
+                ApiFormat::Anthropic,
+                "claude-sonnet-4-6".into(),
+            ),
         };
 
         Self {
@@ -194,8 +198,9 @@ impl HttpAgent {
             .post(&endpoint)
             .json(&body)
             .build()
-            .map_err(|e| ForgeError::ToolExecution(
-                format!("Failed to build HTTP request: {}", e)))?;
+            .map_err(|e| {
+                ForgeError::ToolExecution(format!("Failed to build HTTP request: {}", e))
+            })?;
 
         // Set auth header
         let auth_header = match self.config.format {
@@ -316,10 +321,11 @@ impl AgentAdapter for HttpAgent {
         let req = self.build_request(task)?;
         let start = std::time::Instant::now();
 
-        let response = self.client.execute(req).await.map_err(|e| {
-            ForgeError::ToolExecution(
-                format!("HTTP request failed: {}", e))
-        })?;
+        let response = self
+            .client
+            .execute(req)
+            .await
+            .map_err(|e| ForgeError::ToolExecution(format!("HTTP request failed: {}", e)))?;
 
         let status = response.status();
         let response_body: serde_json::Value =
@@ -388,18 +394,18 @@ impl AgentAdapter for HttpAgent {
             success: !is_error,
             summary: format!(
                 "{} via {} completed in {}ms ({} tokens)",
-                self.config.model,
-                self.config.base_url,
-                duration_ms,
-                token_count
+                self.config.model, self.config.base_url, duration_ms, token_count
             ),
-            output: Some(serde_json::json!({
-                "model": self.config.model,
-                "duration_ms": duration_ms,
-                "token_count": token_count,
-                "status_code": status.as_u16(),
-                "response": text,
-            }).to_string()),
+            output: Some(
+                serde_json::json!({
+                    "model": self.config.model,
+                    "duration_ms": duration_ms,
+                    "token_count": token_count,
+                    "status_code": status.as_u16(),
+                    "response": text,
+                })
+                .to_string(),
+            ),
         })
     }
 }

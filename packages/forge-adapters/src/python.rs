@@ -188,10 +188,7 @@ impl AgentAdapter for PythonAgent {
         event_tx: mpsc::Sender<AgentEvent>,
         mut intervention_rx: mpsc::Receiver<Intervention>,
     ) -> Result<AgentOutcome, ForgeError> {
-        let script = self
-            .script
-            .clone()
-            .unwrap_or_else(|| self.default_script());
+        let script = self.script.clone().unwrap_or_else(|| self.default_script());
 
         let now = Utc::now();
 
@@ -228,20 +225,22 @@ impl AgentAdapter for PythonAgent {
 
         let start = std::time::Instant::now();
         let output = if let Some(timeout_secs) = self.timeout_secs {
-            let child = cmd.spawn().map_err(|e| ForgeError::ToolExecution(
-                format!("Failed to spawn Python: {}", e)))?;
+            let child = cmd
+                .spawn()
+                .map_err(|e| ForgeError::ToolExecution(format!("Failed to spawn Python: {}", e)))?;
             tokio::time::timeout(
                 std::time::Duration::from_secs(timeout_secs),
                 child.wait_with_output(),
             )
             .await
-            .map_err(|_| ForgeError::ToolExecution(
-                format!("Python agent timed out after {}s", timeout_secs)))?
-            .map_err(|e| ForgeError::ToolExecution(
-                format!("Python process error: {}", e)))?
+            .map_err(|_| {
+                ForgeError::ToolExecution(format!("Python agent timed out after {}s", timeout_secs))
+            })?
+            .map_err(|e| ForgeError::ToolExecution(format!("Python process error: {}", e)))?
         } else {
-            cmd.output().await.map_err(|e| ForgeError::ToolExecution(
-                format!("Failed to run Python: {}", e)))?
+            cmd.output()
+                .await
+                .map_err(|e| ForgeError::ToolExecution(format!("Failed to run Python: {}", e)))?
         };
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -306,10 +305,7 @@ impl AgentAdapter for PythonAgent {
 
         Ok(AgentOutcome {
             success: result_success,
-            summary: format!(
-                "{} agent completed in {}ms",
-                self.agent_type, duration_ms
-            ),
+            summary: format!("{} agent completed in {}ms", self.agent_type, duration_ms),
             output: Some(parsed.to_string()),
         })
     }
