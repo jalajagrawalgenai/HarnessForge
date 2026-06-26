@@ -1,0 +1,12 @@
+[package]
+name = "forge-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge Auth — SSO/SAML/OIDC authentication, RBAC, API key management"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror.workspace = true
+tokio = { workspace = true }

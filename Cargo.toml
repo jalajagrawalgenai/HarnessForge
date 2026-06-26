@@ -17,11 +17,15 @@ members = [
     "packages/forge-integrations",
     "packages/forge-py",
     "packages/forge-adapters",
+    "packages/forge-auth",
+    "packages/forge-compliance",
+    "packages/forge-export",
+    "packages/forge-marketplace",
     "examples/basic-agent",
 ]
 
 [workspace.package]
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/jalajagrawalgenai/HarnessForge"

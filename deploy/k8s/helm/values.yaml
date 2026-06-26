@@ -1,0 +1,82 @@
+# Forge Helm Chart — Default Values
+
+replicaCount: 1
+
+image:
+  repository: forgelabs/forge
+  tag: latest
+  pullPolicy: IfNotPresent
+
+forge:
+  server:
+    port: 9100
+    host: "0.0.0.0"
+  mcp:
+    enabled: false
+    port: 9101
+  dashboard:
+    enabled: true
+    port: 3000
+
+audit:
+  storage:
+    type: postgresql  # postgresql | sqlite
+    postgresql:
+      host: forge-postgres
+      port: 5432
+      database: forge
+      username: forge
+      existingSecret: forge-db-credentials
+  retention:
+    days: 30
+  signing:
+    enabled: false
+
+harness:
+  preset: solo
+  observers:
+    - token
+    - latency
+    - cost
+    - accuracy
+    - security
+  detectors:
+    - loop
+    - stale_context
+    - cost_anomaly
+    - secret_leak
+    - prompt_injection
+  strategies:
+    - nudge
+    - compact
+    - circuit_break
+  humanGates: false
+  autoImprove: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+serviceAccount:
+  create: true
+  name: forge
+
+ingress:
+  enabled: false
+  className: ""
+  hosts:
+    - host: forge.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+postgresql:
+  enabled: true
+  auth:
+    database: forge
+    username: forge
+    existingSecret: forge-db-credentials

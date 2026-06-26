@@ -280,7 +280,7 @@ fn list_observers() -> Vec<String> {
 
 #[pyfunction]
 fn get_version() -> String {
-    "0.1.7".into()
+    "0.1.8".into()
 }
 
 #[pymodule]

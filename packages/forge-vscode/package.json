@@ -1,17 +1,39 @@
 {
   "name": "forge-vscode",
-  "displayName": "Forge — Agent Harness",
-  "version": "0.1.0",
-  "description": "Monitor and control Forge agent sessions from VS Code",
-  "main": "extension.js",
+  "displayName": "Forge — AI Agent Harness",
+  "description": "Wrap VS Code AI agents (Copilot, Cline, Continue) with Forge's 12-dimension observation, 16 detectors, and 14 intervention strategies",
+  "version": "0.1.7",
+  "publisher": "forgelabs",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other", "Machine Learning"],
+  "activationEvents": ["onCommand:forge.runAgent", "onCommand:forge.showHealth"],
+  "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {"command": "forge.runAgent","title": "Forge: Run Agent"},
-      {"command": "forge.replaySession","title": "Forge: Replay Session"},
-      {"command": "forge.explainSession","title": "Forge: Explain Session"}
+      { "command": "forge.runAgent", "title": "Forge: Run Agent with Harness" },
+      { "command": "forge.showHealth", "title": "Forge: Show Agent Health" },
+      { "command": "forge.configureHarness", "title": "Forge: Configure Harness" }
     ],
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "forge-sidebar",
+        "title": "Forge",
+        "icon": "media/forge-icon.svg"
+      }]
+    },
     "views": {
-      "explorer": [{"id": "forge-sessions","name": "Forge Sessions"}]
+      "forge-sidebar": [
+        { "id": "forge.sessions", "name": "Sessions" },
+        { "id": "forge.health", "name": "Health" }
+      ]
     }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
   }
 }

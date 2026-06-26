@@ -1,0 +1,16 @@
+apiVersion: v2
+name: forge
+description: Forge — Self-Improving Agent Harness for Kubernetes
+type: application
+version: 0.1.7
+appVersion: "0.1.7"
+keywords:
+  - ai
+  - agent
+  - llm
+  - observability
+  - harness
+maintainers:
+  - name: Forge Labs
+    email: hello@forge.dev
+dependencies: []

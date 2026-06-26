@@ -1,0 +1,12 @@
+[package]
+name = "forge-compliance"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Forge Compliance — EU AI Act, SOC 2, ISO 27001, GDPR compliance packs with pre-built checklists and audit reports"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror.workspace = true

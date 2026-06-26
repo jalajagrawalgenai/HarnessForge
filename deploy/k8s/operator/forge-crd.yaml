@@ -1,0 +1,129 @@
+# Forge Kubernetes Operator
+# Deploys Forge as a managed agent harness in Kubernetes.
+# Supports: agent pods, harness sidecars, audit storage, MCP gateway.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: forgeagents.forge.dev
+spec:
+  group: forge.dev
+  names:
+    kind: ForgeAgent
+    plural: forgeagents
+    singular: forgeagent
+    shortNames: [fa]
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required: [spec]
+        properties:
+          spec:
+            type: object
+            required: [task, preset]
+            properties:
+              task:
+                type: string
+                description: "The task for the agent to execute"
+              preset:
+                type: string
+                enum: [solo, claude-code, langgraph, crewai, autogen, langchain,
+                       openai-swarm, semantic-kernel, haystack, dspy, llamaindex,
+                       taskweaver, agno, atomic-agents, bee-agent, pydantic-ai,
+                       aider, cline, continue, vercel-ai, copilot, cursor, windsurf,
+                       devin, amazon-q, replit-agent, pearai, bolt-new, lovable, v0, custom]
+              model:
+                type: string
+                description: "Model to use (e.g. claude-sonnet-4-6)"
+              healthThreshold:
+                type: number
+                minimum: 0
+                maximum: 1
+                default: 0.7
+              interventions:
+                type: boolean
+                default: true
+              audit:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    default: true
+                  retentionDays:
+                    type: integer
+                    default: 30
+                  storageClass:
+                    type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Running, Completed, Failed, Paused, CircuitBroken]
+                healthScore:
+                  type: number
+                detections:
+                  type: integer
+                interventions:
+                  type: integer
+                sessionId:
+                  type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: forgeharnesses.forge.dev
+spec:
+  group: forge.dev
+  names:
+    kind: ForgeHarness
+    plural: forgeharnesses
+    singular: forgeharness
+    shortNames: [fh]
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required: [spec]
+        properties:
+          spec:
+            type: object
+            properties:
+              observers:
+                type: array
+                items:
+                  type: string
+                  enum: [token, latency, cost, accuracy, security, reliability,
+                         context_quality, orch, comm, compliance, memory, diversity]
+              detectors:
+                type: array
+                items:
+                  type: string
+              strategies:
+                type: array
+                items:
+                  type: string
+              humanGates:
+                type: boolean
+                default: false
+              autoImprove:
+                type: boolean
+                default: false
+                description: "Enable meta-harness self-improvement"
+            status:
+              type: object
+              properties:
+                version:
+                  type: string
+                sessionsMonitored:
+                  type: integer
+                improvementsApplied:
+                  type: integer
