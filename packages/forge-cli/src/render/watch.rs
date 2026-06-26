@@ -9,9 +9,9 @@ use crossterm::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
+    style::{Color, Style},
+    text::Span,
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
 use std::io;
