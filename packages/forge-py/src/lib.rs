@@ -226,7 +226,7 @@ fn get_version() -> String {
 
 #[pymodule]
 #[pyo3(name = "forge_sdk")]
-fn forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HarnessRunResult>()?;
     m.add_class::<PyHarness>()?;
     m.add_function(wrap_pyfunction!(create_harness, m)?)?;
