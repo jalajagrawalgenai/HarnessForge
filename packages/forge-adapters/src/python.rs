@@ -150,7 +150,7 @@ except Exception as e:
         "traceback": traceback.format_exc()
     }}).to_string()
 "#,
-            self.agent_type.to_string(),
+            self.agent_type,
         )
     }
 

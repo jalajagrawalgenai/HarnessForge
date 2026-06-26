@@ -14,6 +14,7 @@ use crate::{BridgeAgent, CliAgent, HttpAgent, PythonAgent};
 use forge_sdk::agent::{AgentAdapter, AgentType};
 
 /// Optional configuration for the factory.
+#[derive(Default)]
 pub struct FactoryConfig {
     /// API key for HTTP-based agents
     pub api_key: Option<String>,
@@ -33,22 +34,6 @@ pub struct FactoryConfig {
     pub callback_url: Option<String>,
     /// Bridge MCP endpoint
     pub mcp_endpoint: Option<String>,
-}
-
-impl Default for FactoryConfig {
-    fn default() -> Self {
-        Self {
-            api_key: None,
-            base_url: None,
-            model: None,
-            work_dir: None,
-            python_path: None,
-            cli_command: None,
-            python_script: None,
-            callback_url: None,
-            mcp_endpoint: None,
-        }
-    }
 }
 
 /// Creates the appropriate AgentAdapter implementation for any agent type.

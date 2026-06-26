@@ -236,7 +236,7 @@ impl AgentAdapter for BridgeAgent {
 
         // 3. Bridge tool call — represents the remote agent session
         let start = std::time::Instant::now();
-        let tool_name = format!("{}-bridge", self.agent_type.to_string());
+        let tool_name = format!("{}-bridge", self.agent_type);
 
         let _ = event_tx
             .send(AgentEvent::ToolCallStart {
