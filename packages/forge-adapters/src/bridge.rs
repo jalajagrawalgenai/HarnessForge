@@ -142,6 +142,7 @@ impl BridgeAgent {
     }
 
     /// Push an intervention to the remote agent via callback URL.
+    #[allow(dead_code)]
     async fn push_intervention(
         &self,
         intervention: &Intervention,

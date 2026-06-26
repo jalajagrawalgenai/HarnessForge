@@ -1,10 +1,9 @@
-use chrono::Utc;
 use forge_audit::explainer;
 use forge_audit::search::SearchEngine;
 use forge_audit::signing;
 use forge_audit::trail::AuditTrail;
 use forge_sdk::types::audit::{
-    AuditEvent, AuditPhase, AuditReport, CheckpointSummary, DetectionSummary, InterventionSummary,
+    AuditPhase, AuditReport, CheckpointSummary, DetectionSummary, InterventionSummary,
     ObservationSummary,
 };
 use serde_json::json;

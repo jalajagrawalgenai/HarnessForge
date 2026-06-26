@@ -1,7 +1,7 @@
 use forge_mcp::client::{McpClient, McpServerConfig};
 use forge_mcp::discovery::McpDiscovery;
 use forge_mcp::gateway::McpGateway;
-use forge_mcp::server::{McpServer, McpTool};
+use forge_mcp::server::McpServer;
 
 #[test]
 fn test_mcp_client() {

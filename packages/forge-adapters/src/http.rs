@@ -10,7 +10,6 @@ use chrono::Utc;
 use forge_sdk::agent::{AgentAdapter, AgentType};
 use forge_sdk::error::ForgeError;
 use forge_sdk::events::{AgentEvent, AgentOutcome, Intervention, ToolResult};
-use serde::Serialize;
 use tokio::sync::mpsc;
 
 /// API format for the HTTP agent.

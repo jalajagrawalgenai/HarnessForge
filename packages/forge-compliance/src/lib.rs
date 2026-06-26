@@ -216,8 +216,12 @@ mod tests {
     #[test]
     fn test_generate_eu_ai_act_report() {
         let report = generate_report(ComplianceFramework::EuAiAct, "test-session");
-        assert_eq!(report.checks.len(), 8); // 4 + 4
-        assert!(report.overall_compliant);
+        assert_eq!(report.checks.len(), 8); // 4 (Art.14) + 4 (Art.15)
+        // 7 of 8 checks are auto-detectable; A14.4 (training) requires human review
+        let passed = report.checks.iter().filter(|c| c.passed).count();
+        assert_eq!(passed, 7);
+        // Overall fails because training (A14.4) is not auto-detectable
+        assert!(!report.overall_compliant);
     }
 
     #[test]

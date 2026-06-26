@@ -1,5 +1,5 @@
 use forge_sdk::events::{
-    AgentEvent, CompressionLayer, DegradeLevel, Intervention, IsolationLevel, ToolResult,
+    AgentEvent, CompressionLayer, DegradeLevel, Intervention, IsolationLevel,
 };
 use forge_sdk::types::detection::{DetectedIssue, IssueCategory, Severity};
 use forge_sdk::types::health::{HealthDimensions, HealthScore, HealthTrend};
@@ -208,7 +208,6 @@ fn test_compression_layer_copy() {
 
 #[test]
 fn test_severity_ordering() {
-    use std::cmp::Ordering;
     // Info < Warning < Error < Critical
     let cases = vec![
         (Severity::Info, Severity::Warning),
