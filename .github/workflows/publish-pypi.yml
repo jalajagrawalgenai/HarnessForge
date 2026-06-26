@@ -20,6 +20,18 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fetch dependencies (with retry)
+        run: |
+          for i in 1 2 3 4 5; do
+            cargo fetch --manifest-path packages/forge-py/Cargo.toml && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+
       - uses: PyO3/maturin-action@v1
         env:
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
