@@ -1,7 +1,7 @@
 //! Session CRUD endpoints — create, list, get, delete, pause, resume sessions.
 
 use crate::session::manager;
-use crate::session::store::{SessionState, SessionStatus, SharedSessionStore};
+use crate::session::store::SessionState;
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::Json;
