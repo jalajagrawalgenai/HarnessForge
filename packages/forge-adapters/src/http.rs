@@ -46,10 +46,10 @@ pub struct HttpAgentConfig {
 /// A real AgentAdapter that wraps any HTTP API-based AI model.
 ///
 /// ```rust
-/// use forge_adapters::HttpAgent;
+/// use forge_adapters::{HttpAgent, ApiFormat};
 /// use forge_sdk::agent::AgentType;
 ///
-/// let agent = HttpAgent::new("claude-1", AgentType::Solo)?
+/// let agent = HttpAgent::new("claude-1", AgentType::Solo)
 ///     .base_url("https://api.anthropic.com")
 ///     .api_key("sk-ant-...")
 ///     .model("claude-sonnet-4-6")

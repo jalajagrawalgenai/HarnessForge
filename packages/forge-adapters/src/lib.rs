@@ -27,6 +27,7 @@ pub mod factory;
 
 pub use cli::CliAgent;
 pub use http::HttpAgent;
+pub use http::ApiFormat;
 pub use python::PythonAgent;
 pub use bridge::BridgeAgent;
 pub use factory::AdapterFactory;

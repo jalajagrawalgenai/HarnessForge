@@ -9,7 +9,7 @@
 //!
 //! ## Architecture
 //!
-//! ```
+//! ```text
 //! ┌──────────┐  events (REST/MCP)  ┌─────────────┐
 //! │  IDE/    │ ──────────────────→ │  BridgeAgent │ ──→ Forge Harness
 //! │  Cloud   │ ←────────────────── │              │ ←── Interventions
