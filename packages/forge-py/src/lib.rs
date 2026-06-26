@@ -125,12 +125,42 @@ impl PyHarness {
 
 fn parse_preset(name: &str) -> forge_sdk::presets::Preset {
     match name.to_lowercase().as_str() {
+        // Frameworks
         "solo" => forge_sdk::presets::Preset::Solo,
-        "claude-code" | "claude" => forge_sdk::presets::Preset::ClaudeCode,
         "langgraph" => forge_sdk::presets::Preset::LangGraph,
         "crewai" | "crew" => forge_sdk::presets::Preset::CrewAI,
         "autogen" => forge_sdk::presets::Preset::AutoGen,
         "langchain" => forge_sdk::presets::Preset::LangChain,
+        "openai-swarm" | "swarm" => forge_sdk::presets::Preset::OpenAISwarm,
+        "semantic-kernel" | "sk" => forge_sdk::presets::Preset::SemanticKernel,
+        "haystack" => forge_sdk::presets::Preset::Haystack,
+        "dspy" => forge_sdk::presets::Preset::DSPy,
+        "llamaindex" => forge_sdk::presets::Preset::LlamaIndex,
+        "taskweaver" => forge_sdk::presets::Preset::TaskWeaver,
+        "agno" => forge_sdk::presets::Preset::Agno,
+        "atomic-agents" | "atomic" => forge_sdk::presets::Preset::AtomicAgents,
+        "bee-agent" | "bee" => forge_sdk::presets::Preset::BeeAgent,
+        "pydantic-ai" | "pydantic" => forge_sdk::presets::Preset::PydanticAI,
+        // Coding agents
+        "claude-code" | "claude" => forge_sdk::presets::Preset::ClaudeCode,
+        "aider" => forge_sdk::presets::Preset::Aider,
+        "cline" => forge_sdk::presets::Preset::Cline,
+        "continue" => forge_sdk::presets::Preset::Continue,
+        // Cloud / IDE
+        "vercel-ai" | "vercel" => forge_sdk::presets::Preset::VercelAI,
+        "copilot" => forge_sdk::presets::Preset::Copilot,
+        "cursor" => forge_sdk::presets::Preset::Cursor,
+        "windsurf" => forge_sdk::presets::Preset::Windsurf,
+        "devin" => forge_sdk::presets::Preset::Devin,
+        "amazon-q" | "q" => forge_sdk::presets::Preset::AmazonQ,
+        "replit-agent" | "replit" => forge_sdk::presets::Preset::ReplitAgent,
+        "pearai" | "pear" => forge_sdk::presets::Preset::PearAI,
+        "bolt-new" | "bolt" => forge_sdk::presets::Preset::BoltNew,
+        "lovable" => forge_sdk::presets::Preset::Lovable,
+        "v0" => forge_sdk::presets::Preset::V0,
+        // Custom
+        "custom" => forge_sdk::presets::Preset::Custom,
+        // Fallback
         _ => forge_sdk::presets::Preset::Solo,
     }
 }
@@ -150,12 +180,41 @@ fn quick_run(task: &str, preset: &str, turns: u32) -> PyResult<HarnessRunResult>
 #[pyfunction]
 fn list_presets() -> Vec<String> {
     vec![
+        // Frameworks
         "solo".into(),
-        "claude-code".into(),
         "langgraph".into(),
         "crewai".into(),
         "autogen".into(),
         "langchain".into(),
+        "openai-swarm".into(),
+        "semantic-kernel".into(),
+        "haystack".into(),
+        "dspy".into(),
+        "llamaindex".into(),
+        "taskweaver".into(),
+        "agno".into(),
+        "atomic-agents".into(),
+        "bee-agent".into(),
+        "pydantic-ai".into(),
+        // Coding agents
+        "claude-code".into(),
+        "aider".into(),
+        "cline".into(),
+        "continue".into(),
+        // Cloud / IDE
+        "vercel-ai".into(),
+        "copilot".into(),
+        "cursor".into(),
+        "windsurf".into(),
+        "devin".into(),
+        "amazon-q".into(),
+        "replit-agent".into(),
+        "pearai".into(),
+        "bolt-new".into(),
+        "lovable".into(),
+        "v0".into(),
+        // Custom
+        "custom".into(),
     ]
 }
 
@@ -221,7 +280,7 @@ fn list_observers() -> Vec<String> {
 
 #[pyfunction]
 fn get_version() -> String {
-    "0.1.5".into()
+    "0.1.6".into()
 }
 
 #[pymodule]
