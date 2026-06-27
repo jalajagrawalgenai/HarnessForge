@@ -43,31 +43,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── PAGE RENDERERS ──
 
 function renderRun() {
-  // First show monitoring status, then load harness config
   document.getElementById('content').innerHTML =
     '<div class="card" style="border-left:3px solid var(--accent-green)"><h2>Live Monitoring</h2>' +
     '<div id="ingest-status"><p>Checking for agent activity...</p></div></div>' +
-    '<div class="card"><h2>Run Agent (Manual)</h2><div id="run-form"><p>Loading...</p></div></div>' +
     '<div class="card"><h2>Quick Stats</h2><div id="quick-stats"><p>Loading stats...</p></div></div>';
 
   checkIngestStatus();
-
-  api('/v1/harness').then(function(h) {
-    var agents = (h.agent_types || ['solo']).map(function(t) { return '<option>' + t + '</option>'; }).join('');
-    var presets = (h.presets || ['solo']).map(function(p) { return '<option>' + p + '</option>'; }).join('');
-    document.getElementById('run-form').innerHTML =
-      '<div class="form-group"><label>Task</label><textarea id="task" placeholder="Describe your task..."></textarea></div>' +
-      '<div class="flex-row mb">' +
-      '<div class="form-group"><label>Agent Type</label><select id="agent-type">' + agents + '</select></div>' +
-      '<div class="form-group"><label>Preset</label><select id="preset">' + presets + '</select></div>' +
-      '</div>' +
-      '<button onclick="doRun()">Run with Harness</button> ' +
-      '<button class="warn" onclick="doDryRun()">Dry Run</button>' +
-      '<div id="run-result"></div>';
-    refreshStats();
-  }).catch(function(e) {
-    document.getElementById('run-form').innerHTML = '<p style="color:var(--accent-red)">Error: ' + e.message + '</p>';
-  });
+  refreshStats();
 }
 
 function checkIngestStatus() {
@@ -86,13 +68,15 @@ function checkIngestStatus() {
       '<div><strong style="font-size:16px">' + msg + '</strong>' +
       '<p style="margin:4px 0;color:var(--text-secondary)">' +
       running + ' active, ' + total + ' total sessions | ' + events + ' events captured' +
+      '</p><p style="margin:4px 0;color:var(--text-secondary);font-size:13px">' +
+      'Use Claude Code, LangGraph, CrewAI, or any agent — Forge auto-detects and monitors.' +
       '</p></div></div>';
     if (running > 0) {
       el.innerHTML += '<p style="margin-top:8px"><a href="javascript:showPage(\'sessions\')">View sessions →</a></p>';
     }
   }).catch(function() {
     var el = document.getElementById('ingest-status');
-    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Ingest endpoint not available. Upgrade to latest Forge server.</p>';
+    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Forge server starting up...</p>';
   });
   setTimeout(function() { if (currentPage === 'run') checkIngestStatus(); }, 5000);
 }

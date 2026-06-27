@@ -1,7 +1,9 @@
-//! Session CRUD endpoints — create, list, get, delete, pause, resume sessions.
+//! Session endpoints — list, get, delete, pause, resume.
+//!
+//! Sessions are created automatically by the ingest API when real
+//! agent events arrive. There is no manual session creation.
+//! No MockAgent. Real agents only.
 
-use crate::session::manager;
-use crate::session::store::SessionState;
 use crate::AppState;
 use axum::extract::{Path, State};
 use axum::Json;
@@ -9,52 +11,14 @@ use forge_sdk::events::Intervention;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-/// POST /v1/sessions
-/// Request: { "task": "...", "agent_type": "...", "preset": "..." }
-/// Creates a new session and spawns the harness in the background.
-pub async fn create(State(state): State<Arc<AppState>>, Json(body): Json<Value>) -> Json<Value> {
-    let task = body
-        .get("task")
-        .and_then(|v| v.as_str())
-        .unwrap_or("default task");
-    let agent_type = body
-        .get("agent_type")
-        .and_then(|v| v.as_str())
-        .unwrap_or("solo");
-    let preset = body
-        .get("preset")
-        .and_then(|v| v.as_str())
-        .unwrap_or("solo");
-
-    let id = uuid::Uuid::new_v4().to_string();
-    let session = SessionState::new(
-        id.clone(),
-        task.to_string(),
-        agent_type.to_string(),
-        preset.to_string(),
-    );
-
-    {
-        let mut sessions = state.store.write().await;
-        sessions.insert(id.clone(), session);
-    }
-
-    // Spawn harness in background
-    manager::spawn_session(
-        state.store.clone(),
-        id.clone(),
-        task.to_string(),
-        agent_type.to_string(),
-        preset.to_string(),
-    )
-    .await;
-
+/// Sessions are auto-created via POST /api/v1/ingest/event.
+/// This endpoint returns a message directing users to that flow.
+pub async fn create() -> Json<Value> {
     Json(json!({
-        "id": id,
-        "status": "running",
-        "task": task,
-        "agent_type": agent_type,
-        "preset": preset,
+        "error": "Manual session creation is disabled.",
+        "message": "Sessions are created automatically when you use your AI agent.",
+        "how": "Just use Claude Code, LangGraph, CrewAI, or any agent normally.",
+        "dashboard": "Open http://127.0.0.1:3000 to see auto-detected sessions."
     }))
 }
 
