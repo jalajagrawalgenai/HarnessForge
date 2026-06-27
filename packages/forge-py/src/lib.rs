@@ -280,7 +280,7 @@ fn list_observers() -> Vec<String> {
 
 #[pyfunction]
 fn get_version() -> String {
-    "0.2.4".into()
+    "0.2.5".into()
 }
 
 /// Start the Forge dashboard server.
