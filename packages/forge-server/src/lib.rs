@@ -347,5 +347,12 @@ pub async fn run_server(start_port: u16) {
     println!();
     tracing::info!("Forge server started on http://{}", addr);
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            tokio::signal::ctrl_c().await.ok();
+            println!();
+            println!("Shutting down...");
+        })
+        .await
+        .unwrap();
 }
