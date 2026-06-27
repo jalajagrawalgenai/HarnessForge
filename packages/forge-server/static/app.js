@@ -43,11 +43,19 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── PAGE RENDERERS ──
 
 function renderRun() {
+  // First show monitoring status, then load harness config
+  document.getElementById('content').innerHTML =
+    '<div class="card" style="border-left:3px solid var(--accent-green)"><h2>Live Monitoring</h2>' +
+    '<div id="ingest-status"><p>Checking for agent activity...</p></div></div>' +
+    '<div class="card"><h2>Run Agent (Manual)</h2><div id="run-form"><p>Loading...</p></div></div>' +
+    '<div class="card"><h2>Quick Stats</h2><div id="quick-stats"><p>Loading stats...</p></div></div>';
+
+  checkIngestStatus();
+
   api('/v1/harness').then(function(h) {
     var agents = (h.agent_types || ['solo']).map(function(t) { return '<option>' + t + '</option>'; }).join('');
     var presets = (h.presets || ['solo']).map(function(p) { return '<option>' + p + '</option>'; }).join('');
-    document.getElementById('content').innerHTML =
-      '<div class="card"><h2>Run Agent</h2>' +
+    document.getElementById('run-form').innerHTML =
       '<div class="form-group"><label>Task</label><textarea id="task" placeholder="Describe your task..."></textarea></div>' +
       '<div class="flex-row mb">' +
       '<div class="form-group"><label>Agent Type</label><select id="agent-type">' + agents + '</select></div>' +
@@ -55,12 +63,38 @@ function renderRun() {
       '</div>' +
       '<button onclick="doRun()">Run with Harness</button> ' +
       '<button class="warn" onclick="doDryRun()">Dry Run</button>' +
-      '<div id="run-result"></div></div>' +
-      '<div class="card"><h2>Quick Stats</h2><div id="quick-stats"><p>Loading stats...</p></div></div>';
+      '<div id="run-result"></div>';
     refreshStats();
   }).catch(function(e) {
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Run Agent</h2><p>Error connecting to server. Is forge serve running?</p><p style="color:var(--text-secondary)">' + e.message + '</p></div>';
+    document.getElementById('run-form').innerHTML = '<p style="color:var(--accent-red)">Error: ' + e.message + '</p>';
   });
+}
+
+function checkIngestStatus() {
+  api('/v1/ingest/status').then(function(s) {
+    var el = document.getElementById('ingest-status');
+    if (!el) return;
+    var running = s.activeSessions || 0;
+    var total = s.totalSessions || 0;
+    var events = s.totalEventsInRing || 0;
+    var msg = s.message || 'Waiting for agent activity...';
+    var color = running > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)';
+    var dot = running > 0 ? '●' : '○';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px">' +
+      '<span style="font-size:24px;color:' + color + '">' + dot + '</span>' +
+      '<div><strong style="font-size:16px">' + msg + '</strong>' +
+      '<p style="margin:4px 0;color:var(--text-secondary)">' +
+      running + ' active, ' + total + ' total sessions | ' + events + ' events captured' +
+      '</p></div></div>';
+    if (running > 0) {
+      el.innerHTML += '<p style="margin-top:8px"><a href="javascript:showPage(\'sessions\')">View sessions →</a></p>';
+    }
+  }).catch(function() {
+    var el = document.getElementById('ingest-status');
+    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Ingest endpoint not available. Upgrade to latest Forge server.</p>';
+  });
+  setTimeout(function() { if (currentPage === 'run') checkIngestStatus(); }, 5000);
 }
 
 function doRun() {
@@ -141,16 +175,38 @@ function doResume(id) { api('/v1/sessions/' + id + '/resume', {method:'POST',hea
 function renderSessions() {
   api('/v1/sessions').then(function(d) {
     var rows = (d.sessions||[]).map(function(s) {
-      return '<tr><td>' + (s.id||'').substring(0,12) + '</td><td>' + (s.task||'').substring(0,40) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td><a href="javascript:showLive(\'' + s.id + '\')">Live</a></td></tr>';
+      var isAuto = (s.task === '(live agent session)') ? ' ⚡auto' : '';
+      var sourceStyle = isAuto ? 'color:var(--accent-green)' : 'color:var(--text-secondary)';
+      return '<tr><td>' + (s.id||'').substring(0,12) + '</td><td>' + (s.task||'').substring(0,40) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td style="' + sourceStyle + ';font-size:12px">' + (isAuto || 'manual') + '</td><td><a href="javascript:showLive(\'' + s.id + '\')">Live</a></td></tr>';
     }).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Sessions</h2><table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="5">No sessions yet</td></tr>') + '</tbody></table></div>';
+    document.getElementById('content').innerHTML =
+      '<div class="card"><h2>Sessions</h2>' +
+      '<p style="color:var(--text-secondary);margin-bottom:8px">⚡ = auto-detected from real agent activity | manual = created via dashboard</p>' +
+      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="6">No sessions yet. Sessions appear automatically when you use Claude Code or other agents.</td></tr>') + '</tbody></table></div>';
   }).catch(function(e) {
     document.getElementById('content').innerHTML = '<div class="card"><h2>Sessions</h2><p>Error: ' + e.message + '</p></div>';
   });
 }
 
 function renderLive() {
-  document.getElementById('content').innerHTML = '<div class="card"><h2>Live Session</h2><p>Click "Live" next to a session in <a href="javascript:showPage(\'sessions\')">Sessions</a> to view.</p></div>';
+  // Auto-connect to most recent running session if no specific ID
+  api('/v1/sessions').then(function(d) {
+    var running = (d.sessions || []).filter(function(s) { return s.status === 'running'; });
+    if (running.length > 0) {
+      showLive(running[0].id);
+      return;
+    }
+    // Show all sessions with Live links
+    var rows = (d.sessions || []).slice(0, 10).map(function(s) {
+      return '<tr><td>' + (s.id||'').substring(0,12) + '</td><td>' + (s.task||'').substring(0,50) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'pending') + '">' + s.status + '</span></td><td><a href="javascript:showLive(\'' + s.id + '\')">View</a></td></tr>';
+    }).join('');
+    document.getElementById('content').innerHTML =
+      '<div class="card"><h2>Live Sessions</h2>' +
+      '<p style="color:var(--text-secondary)">No active sessions. Select a past session to replay:</p>' +
+      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody>' + (rows||'<tr><td colspan="5">No sessions</td></tr>') + '</tbody></table></div>';
+  }).catch(function(e) {
+    document.getElementById('content').innerHTML = '<div class="card"><h2>Live Session</h2><p>Error: ' + e.message + '</p></div>';
+  });
 }
 
 function renderCompliance() {

@@ -7,6 +7,7 @@ pub mod compliance;
 pub mod export_routes;
 pub mod harness;
 pub mod health;
+pub mod ingest;
 pub mod marketplace;
 pub mod mcp_routes;
 pub mod meta;

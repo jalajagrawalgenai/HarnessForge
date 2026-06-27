@@ -1,4 +1,5 @@
 pub mod db;
+pub mod hooks;
 pub mod middleware;
 pub mod routes;
 pub mod session;
@@ -275,6 +276,18 @@ pub fn create_app(store: SharedSessionStore) -> Router {
             "/api/v1/admin/quotas",
             axum::routing::get(routes::admin::get_quotas).put(routes::admin::update_quotas),
         )
+        .route(
+            "/api/v1/ingest/event",
+            axum::routing::post(routes::ingest::ingest_event),
+        )
+        .route(
+            "/api/v1/ingest/transcript",
+            axum::routing::post(routes::ingest::ingest_transcript),
+        )
+        .route(
+            "/api/v1/ingest/status",
+            axum::routing::get(routes::ingest::ingest_status),
+        )
         .route("/ws", axum::routing::get(ws::handler::ws_handler))
         .route("/style.css", axum::routing::get(serve_css))
         .route("/app.js", axum::routing::get(serve_js))
@@ -339,6 +352,11 @@ pub async fn run_server(start_port: u16) {
     };
 
     let addr = listener.local_addr().unwrap();
+    let port = addr.port();
+
+    // Auto-register Forge hook in Claude Code settings
+    hooks::setup_hooks(port);
+
     println!("========================================");
     println!("  Forge Dashboard");
     println!("  http://{}", addr);
