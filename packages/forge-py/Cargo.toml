@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 forge-sdk = { path = "../forge-sdk" }
 forge-harness = { path = "../forge-harness" }
+forge-server = { path = "../forge-server" }
 pyo3 = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }

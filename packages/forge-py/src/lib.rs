@@ -283,6 +283,15 @@ fn get_version() -> String {
     "0.2.0".into()
 }
 
+/// Start the Forge dashboard server.
+/// Tries port 3000, then 3001, 3002... until it finds a free one.
+#[pyfunction]
+#[pyo3(signature = (port=3000))]
+fn serve(port: u16) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async { forge_server::run_server(port).await });
+}
+
 #[pymodule]
 #[pyo3(name = "forge_sdk")]
 fn _forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -295,5 +304,6 @@ fn _forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(list_strategies, m)?)?;
     m.add_function(wrap_pyfunction!(list_observers, m)?)?;
     m.add_function(wrap_pyfunction!(get_version, m)?)?;
+    m.add_function(wrap_pyfunction!(serve, m)?)?;
     Ok(())
 }
