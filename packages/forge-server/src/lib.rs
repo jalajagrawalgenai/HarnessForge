@@ -5,10 +5,10 @@ pub mod session;
 pub mod ws;
 
 use crate::session::store::SharedSessionStore;
-use axum::Router;
 use axum::body::Body;
 use axum::http::{header, Response, StatusCode};
 use axum::response::IntoResponse;
+use axum::Router;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -308,7 +308,10 @@ async fn serve_css() -> impl IntoResponse {
 async fn serve_js() -> impl IntoResponse {
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "application/javascript; charset=utf-8")
+        .header(
+            header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )
         .body(Body::from(APP_JS))
         .unwrap()
 }
