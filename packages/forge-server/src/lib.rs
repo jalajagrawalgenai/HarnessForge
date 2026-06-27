@@ -6,9 +6,11 @@ pub mod ws;
 
 use crate::session::store::SharedSessionStore;
 use axum::Router;
+use axum::body::Body;
+use axum::http::{header, Response, StatusCode};
+use axum::response::IntoResponse;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -274,12 +276,41 @@ pub fn create_app(store: SharedSessionStore) -> Router {
             axum::routing::get(routes::admin::get_quotas).put(routes::admin::update_quotas),
         )
         .route("/ws", axum::routing::get(ws::handler::ws_handler))
-        .fallback_service(
-            ServeDir::new(concat!(env!("CARGO_MANIFEST_DIR"), "/static"))
-                .append_index_html_on_directories(true),
-        )
+        .route("/style.css", axum::routing::get(serve_css))
+        .route("/app.js", axum::routing::get(serve_js))
+        .route("/", axum::routing::get(serve_index))
+        .fallback(serve_index)
         .layer(CorsLayer::permissive())
         .with_state(state)
+}
+
+// Embedded static files — compiled into the binary, always available
+const INDEX_HTML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/index.html"));
+const STYLE_CSS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/style.css"));
+const APP_JS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/static/app.js"));
+
+async fn serve_index() -> impl IntoResponse {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .body(Body::from(INDEX_HTML))
+        .unwrap()
+}
+
+async fn serve_css() -> impl IntoResponse {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/css; charset=utf-8")
+        .body(Body::from(STYLE_CSS))
+        .unwrap()
+}
+
+async fn serve_js() -> impl IntoResponse {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/javascript; charset=utf-8")
+        .body(Body::from(APP_JS))
+        .unwrap()
 }
 
 pub async fn run_server(start_port: u16) {
