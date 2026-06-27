@@ -327,6 +327,7 @@ pub async fn run_server(start_port: u16) {
         match tokio::net::TcpListener::bind(addr).await {
             Ok(listener) => break listener,
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                println!("Port {} is in use, trying port {}...", port, port + 1);
                 tracing::warn!("Port {} is in use, trying port {}...", port, port + 1);
                 port += 1;
                 if port > start_port + 100 {
@@ -338,8 +339,13 @@ pub async fn run_server(start_port: u16) {
     };
 
     let addr = listener.local_addr().unwrap();
+    println!("========================================");
+    println!("  Forge Dashboard");
+    println!("  http://{}", addr);
+    println!("========================================");
+    println!("  Press Ctrl+C to stop");
+    println!();
     tracing::info!("Forge server started on http://{}", addr);
-    tracing::info!("Dashboard: http://{}", addr);
 
     axum::serve(listener, app).await.unwrap();
 }

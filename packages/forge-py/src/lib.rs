@@ -280,7 +280,7 @@ fn list_observers() -> Vec<String> {
 
 #[pyfunction]
 fn get_version() -> String {
-    "0.2.2".into()
+    "0.2.3".into()
 }
 
 /// Start the Forge dashboard server.
@@ -288,6 +288,17 @@ fn get_version() -> String {
 #[pyfunction]
 #[pyo3(signature = (port=3000))]
 fn serve(port: u16) {
+    // Initialize tracing so server logs are visible
+    let _ = tracing_subscriber::fmt()
+        .with_target(false)
+        .with_level(false)
+        .compact()
+        .try_init();
+
+    println!("Starting Forge server (port {})...", port);
+    println!("Press Ctrl+C to stop");
+    println!();
+
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async { forge_server::run_server(port).await });
 }
