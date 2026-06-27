@@ -51,7 +51,7 @@ def _setup_forge():
             pass
     if not _is_registered():
         sp = _claude_settings_path()
-        hook_cmd = f"node {sd}/observe_hook.mjs"
+        hook_cmd = "node " + sd.replace("\\", "/") + "/observe_hook.mjs"
         events = [
             "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
             "PostToolUseFailure", "SessionEnd", "Stop", "PreCompact",

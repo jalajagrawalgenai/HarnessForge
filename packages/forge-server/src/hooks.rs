@@ -57,11 +57,12 @@ fn write_hook_script(state_dir: &Path) {
 
 fn register_in_claude_settings(port: u16) {
     let settings_path = home_dir().join(".claude").join("settings.json");
-    let hook_cmd = format!(
-        "node {}/observe_hook.mjs --port {}",
-        home_dir().join(".forge").display(),
-        port
-    );
+    let hook_path = home_dir()
+        .join(".forge")
+        .display()
+        .to_string()
+        .replace('\\', "/");
+    let hook_cmd = format!("node {}/observe_hook.mjs --port {}", hook_path, port);
 
     let mut settings: Value = if settings_path.exists() {
         fs::read_to_string(&settings_path)
