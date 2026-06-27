@@ -70,7 +70,10 @@ async fn sessions_create() {
     .await;
     assert_eq!(s, 200);
     assert!(b["error"].as_str().is_some());
-    assert_eq!(b["how"], "Just use Claude Code, LangGraph, CrewAI, or any agent normally.");
+    assert_eq!(
+        b["how"],
+        "Just use Claude Code, LangGraph, CrewAI, or any agent normally."
+    );
 }
 #[tokio::test]
 async fn sessions_list() {
