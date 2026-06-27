@@ -5,11 +5,11 @@
 use crate::session::store::SharedSessionStore;
 use tracing;
 
-/// Sessions are auto-created by the ingest route when real agent events
-/// arrive. This module provides helpers for session lifecycle management.
-///
-/// The old MockAgent-based spawn_session has been removed.
-/// All sessions now come from actual agentic systems via POST /api/v1/ingest/event.
+// Sessions are auto-created by the ingest route when real agent events
+// arrive. This module provides helpers for session lifecycle management.
+//
+// The old MockAgent-based spawn_session has been removed.
+// All sessions now come from actual agentic systems via POST /api/v1/ingest/event.
 
 /// Clean up stale sessions (completed/failed older than 24h).
 #[allow(dead_code)]

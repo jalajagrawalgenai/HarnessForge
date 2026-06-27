@@ -62,24 +62,26 @@ async fn harness_has_counts() {
 }
 #[tokio::test]
 async fn sessions_create() {
+    // Manual creation now returns a helpful message
     let (s, b) = post(
         "/api/v1/sessions",
         &serde_json::json!({"task":"test","agent_type":"solo","preset":"solo"}),
     )
     .await;
     assert_eq!(s, 200);
-    assert!(b["id"].as_str().is_some());
-    assert_eq!(b["status"], "running");
+    assert!(b["error"].as_str().is_some());
+    assert_eq!(b["how"], "Just use Claude Code, LangGraph, CrewAI, or any agent normally.");
 }
 #[tokio::test]
 async fn sessions_list() {
     let app = forge_server::create_app(new_store());
+    // Create session via ingest API (real agent path)
     let req1 = http::Request::builder()
         .method("POST")
-        .uri("/api/v1/sessions")
+        .uri("/api/v1/ingest/event")
         .header("content-type", "application/json")
         .body(Body::from(
-            r#"{"task":"t","agent_type":"solo","preset":"solo"}"#,
+            r#"{"agentClass":"claude-code","sessionId":"test-list-1","agentId":"ag1","hookName":"SessionStart","payload":{"prompt":"test task"},"flags":{"startsSession":true}}"#,
         ))
         .unwrap();
     let _ = app.clone().oneshot(req1).await.unwrap();
