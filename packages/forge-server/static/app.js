@@ -88,6 +88,9 @@ function checkIngestStatus() {
     var running = s.activeSessions || 0;
     var total = s.totalSessions || 0;
     var events = s.totalEventsInRing || 0;
+    var observations = s.totalObservations || 0;
+    var detections = s.totalDetections || 0;
+    var interventions = s.totalInterventions || 0;
     var msg = s.message || 'Waiting for agent activity...';
     var color = running > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)';
     var dot = running > 0 ? '●' : '○';
@@ -96,9 +99,10 @@ function checkIngestStatus() {
       '<span style="font-size:24px;color:' + color + '">' + dot + '</span>' +
       '<div><strong style="font-size:16px">' + msg + '</strong>' +
       '<p style="margin:4px 0;color:var(--text-secondary)">' +
-      running + ' active, ' + total + ' total sessions | ' + events + ' events captured' +
+      running + ' active, ' + total + ' total | ' + events + ' events | ' +
+      observations + ' observations | ' + detections + ' detections | ' + interventions + ' interventions' +
       '</p><p style="margin:4px 0;color:var(--text-secondary);font-size:13px">' +
-      'Use Claude Code, LangGraph, CrewAI, or any agent — Forge auto-detects and monitors.' +
+      '12 observers · 16 detectors · 14 strategies — full harness pipeline running on every event.' +
       '</p></div></div>';
     if (running > 0) {
       el.innerHTML += '<p style="margin-top:8px"><a href="javascript:showPage(\'sessions\')">View sessions →</a></p>';
@@ -133,13 +137,15 @@ function doDryRun() {
 }
 
 function refreshStats() {
-  api('/v1/analytics/overview').then(function(o) {
+  api('/v1/ingest/status').then(function(s) {
     document.getElementById('quick-stats').innerHTML =
       '<div class="stats-grid">' +
-      '<div class="stat-card"><div class="stat-value">' + (o.total_sessions||0) + '</div><div class="stat-label">Sessions</div></div>' +
-      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (o.completed||0) + '</div><div class="stat-label">Completed</div></div>' +
-      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-yellow)">' + (o.running||0) + '</div><div class="stat-label">Running</div></div>' +
-      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">-</div><div class="stat-label">Health</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + (s.totalSessions||0) + '</div><div class="stat-label">Sessions</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (s.activeSessions||0) + '</div><div class="stat-label">Active</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-yellow)">' + (s.totalObservations||0) + '</div><div class="stat-label">Observations</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-red)">' + (s.totalDetections||0) + '</div><div class="stat-label">Detections</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-blue)">' + (s.totalInterventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + (s.totalEventsInRing||0) + '</div><div class="stat-label">Events</div></div>' +
       '</div>';
   }).catch(function(){});
 }
@@ -149,20 +155,66 @@ function showLive(id) {
   document.getElementById('content').innerHTML =
     '<div class="live-layout">' +
     '<div class="panel"><h2>Session: ' + id.substring(0,12) + '</h2>' +
+    '<div id="session-meta"><p>Loading session data...</p></div>' +
     '<div class="flex-row mb"><button onclick="doPause(\'' + id + '\')">Pause</button><button onclick="doResume(\'' + id + '\')">Resume</button></div>' +
-    '<div class="conversation" id="stream" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px"><p>Connecting...</p></div></div>' +
-    '<div class="panel"><h3>Health</h3><div id="gauges">' +
-    ['Token','Latency','Cost','Accuracy','Security','Reliability','Context','Orch','Compliance'].map(function(d) { return '<div class="gauge"><div class="gauge-label">' + d + '</div><div class="gauge-bar"><div class="gauge-fill gauge-green" style="width:100%"></div></div></div>'; }).join('') +
-    '</div></div></div>';
-  // Connect WebSocket
+    '<div class="conversation" id="stream" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px"><p>Connecting to live stream...</p></div></div>' +
+    '<div class="panel"><h3>Health Scores</h3><div id="gauges"><p>Loading...</p></div>' +
+    '<div id="pipeline-summary" style="margin-top:12px"></div></div></div>';
+
+  // Load session data
+  api('/v1/sessions/' + id).then(function(s) {
+    // Update meta
+    var hs = s.health_score;
+    var healthColor = hs && hs.overall > 0.8 ? 'var(--accent-green)' : hs && hs.overall > 0.5 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+    document.getElementById('session-meta').innerHTML =
+      '<p><strong>Task:</strong> ' + (s.task||'') + ' | <strong>Agent:</strong> ' + (s.agent_type||'') +
+      ' | <strong>Status:</strong> <span class="badge badge-' + (s.status||'pending') + '">' + s.status + '</span>' +
+      ' | <strong>Health:</strong> <span style="color:' + healthColor + ';font-weight:600">' + (hs ? Math.round(hs.overall*100) + '%' : 'N/A') + '</span></p>';
+
+    // Update health gauges with real values
+    if (hs && hs.dimensions) {
+      var dims = hs.dimensions;
+      var gaugeNames = [
+        ['Token', dims.token_efficiency],
+        ['Latency', dims.latency],
+        ['Cost', dims.cost],
+        ['Accuracy', dims.accuracy],
+        ['Security', dims.security],
+        ['Reliability', dims.reliability],
+        ['Context', dims.context_quality],
+        ['Orch', dims.orchestration],
+        ['Compliance', dims.compliance]
+      ];
+      document.getElementById('gauges').innerHTML = gaugeNames.map(function(g) {
+        var pct = Math.round(g[1] * 100);
+        var gColor = g[1] > 0.8 ? 'gauge-green' : g[1] > 0.5 ? 'gauge-yellow' : 'gauge-red';
+        return '<div class="gauge"><div class="gauge-label">' + g[0] + ' <span style="font-size:11px">' + pct + '%</span></div>' +
+          '<div class="gauge-bar"><div class="gauge-fill ' + gColor + '" style="width:' + pct + '%"></div></div></div>';
+      }).join('');
+    }
+
+    // Show pipeline summary
+    var pipe = s.pipeline || {};
+    var dets = pipe.detections || [];
+    var ivs = pipe.interventions || [];
+    var obs = pipe.observations || [];
+    document.getElementById('pipeline-summary').innerHTML =
+      '<div style="font-size:13px;color:var(--text-secondary)">' +
+      '<strong>Pipeline:</strong> ' + obs.length + ' observations | ' + dets.length + ' detections | ' + ivs.length + ' interventions' +
+      (dets.length > 0 ? '<div style="margin-top:8px;color:var(--accent-yellow)">⚠ Detections: ' + dets.map(function(d) { return d.category || ''; }).join(', ') + '</div>' : '') +
+      (ivs.length > 0 ? '<div style="margin-top:4px;color:var(--accent-green)">🔧 Interventions: ' + ivs.length + ' applied</div>' : '') +
+      '</div>';
+  }).catch(function() {});
+
+  // Connect WebSocket for live events
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   var ws = new WebSocket(proto + '//' + location.host + '/ws');
   ws.onopen = function() { ws.send(JSON.stringify({action:'subscribe', session_id:id})); };
   ws.onmessage = function(evt) {
     try {
       var e = JSON.parse(evt.data);
-      var s = document.getElementById('stream');
-      var t = e.type || 'unknown';
+      var el = document.getElementById('stream');
+      var t = e.type || (e.hookName ? 'hook' : 'unknown');
       var txt = '';
       if (t === 'started') txt = '>> ' + (e.task || '');
       else if (t === 'thinking_start') txt = 'Thinking...';
@@ -171,13 +223,14 @@ function showLive(id) {
       else if (t === 'tool_call_end') txt = '< ' + (e.tool||'') + ' done';
       else if (t === 'completed') txt = 'OK Completed: ' + (e.summary||'');
       else if (t === 'failed') txt = 'XX Failed: ' + (e.error||'');
+      else if (t === 'hook') txt = '[' + (e.hookName||'event') + '] ' + (e.toolName||'');
       else txt = JSON.stringify(e);
       var div = document.createElement('div');
       div.style.padding = '2px 0';
       div.style.borderBottom = '1px solid var(--border)';
       div.textContent = txt;
-      s.appendChild(div);
-      s.scrollTop = s.scrollHeight;
+      el.appendChild(div);
+      el.scrollTop = el.scrollHeight;
     } catch(ex) {}
   };
 }
@@ -190,12 +243,23 @@ function renderSessions() {
     var rows = (d.sessions||[]).map(function(s) {
       var isAuto = (s.task === '(live agent session)') ? ' ⚡auto' : '';
       var sourceStyle = isAuto ? 'color:var(--accent-green)' : 'color:var(--text-secondary)';
-      return '<tr><td>' + (s.id||'').substring(0,12) + '</td><td>' + (s.task||'').substring(0,40) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td style="' + sourceStyle + ';font-size:12px">' + (isAuto || 'manual') + '</td><td><a href="javascript:showLive(\'' + s.id + '\')">Live</a></td></tr>';
+      var health = s.health_score;
+      var healthHtml = '-';
+      if (health && health.overall !== undefined) {
+        var pct = Math.round(health.overall * 100);
+        var hColor = health.overall > 0.8 ? 'var(--accent-green)' : health.overall > 0.5 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+        healthHtml = '<span style="color:' + hColor + ';font-weight:600">' + pct + '%</span>';
+      }
+      var pipe = s.pipeline || {};
+      var obs = pipe.observation_count || 0;
+      var dets = pipe.detection_count || 0;
+      var ivs = pipe.intervention_count || 0;
+      return '<tr><td><code>' + (s.id||'').substring(0,12) + '</code></td><td>' + (s.task||'').substring(0,35) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td>' + healthHtml + '</td><td>' + obs + '/' + dets + '/' + ivs + '</td><td><a href="javascript:showLive(\'' + s.id + '\')">Live</a></td></tr>';
     }).join('');
     document.getElementById('content').innerHTML =
       '<div class="card"><h2>Sessions</h2>' +
-      '<p style="color:var(--text-secondary);margin-bottom:8px">⚡ = auto-detected from real agent activity | manual = created via dashboard</p>' +
-      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="6">No sessions yet. Sessions appear automatically when you use Claude Code or other agents.</td></tr>') + '</tbody></table></div>';
+      '<p style="color:var(--text-secondary);margin-bottom:8px">⚡ = auto-detected | Health = weighted score | O/D/I = Observations/Detections/Interventions</p>' +
+      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Health</th><th>O/D/I</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="7">No sessions yet. Sessions appear automatically when you use Claude Code or other agents.</td></tr>') + '</tbody></table></div>';
   }).catch(function(e) {
     document.getElementById('content').innerHTML = '<div class="card"><h2>Sessions</h2><p>Error: ' + e.message + '</p></div>';
   });
@@ -273,15 +337,20 @@ function renderCloud() {
   });
 }
 function renderAnalytics() {
-  api('/v1/analytics/overview').then(function(o) {
+  api('/v1/ingest/status').then(function(s) {
     document.getElementById('content').innerHTML =
       '<div class="card"><h2>Analytics</h2>' +
       '<div class="stats-grid">' +
-      '<div class="stat-card"><div class="stat-value">' + (o.total_sessions||0) + '</div><div class="stat-label">Total Sessions</div></div>' +
-      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (o.completed||0) + '</div><div class="stat-label">Completed</div></div>' +
-      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-yellow)">' + (o.running||0) + '</div><div class="stat-label">Running</div></div>' +
-      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-red)">' + (o.failed||0) + '</div><div class="stat-label">Failed</div></div>' +
-      '</div></div>';
+      '<div class="stat-card"><div class="stat-value">' + (s.totalSessions||0) + '</div><div class="stat-label">Total Sessions</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (s.activeSessions||0) + '</div><div class="stat-label">Active</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-yellow)">' + (s.totalObservations||0) + '</div><div class="stat-label">Observations</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-red)">' + (s.totalDetections||0) + '</div><div class="stat-label">Detections</div></div>' +
+      '<div class="stat-card"><div class="stat-value" style="color:var(--accent-blue)">' + (s.totalInterventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + (s.totalEventsInRing||0) + '</div><div class="stat-label">Events Ingested</div></div>' +
+      '</div>' +
+      '<p style="margin-top:12px;color:var(--text-secondary)">' + (s.message||'') + '</p>' +
+      '<p style="color:var(--text-secondary);font-size:13px">12 observers · 16 detectors · 14 strategies running on every event</p>' +
+      '</div>';
   });
 }
 function renderMeta() { document.getElementById('content').innerHTML = '<div class="card"><h2>Meta-Harness</h2><p>Self-improving harness. Requires 20+ completed sessions for pattern mining.</p></div>'; }
