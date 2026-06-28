@@ -211,7 +211,7 @@ pub async fn load_sessions(store: &SharedSessionStore) -> u64 {
                             .filter_map(|v| v.as_str().map(String::from))
                             .collect();
                     }
-                    if let Some(hs) = &data["health_score"].as_object() {
+                    if let Some(_hs) = &data["health_score"].as_object() {
                         session.health_score =
                             serde_json::from_value(data["health_score"].clone()).ok();
                     }

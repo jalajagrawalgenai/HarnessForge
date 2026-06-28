@@ -46,6 +46,7 @@ fn build_registry_for_preset(preset_name: &str) -> forge_harness::plugin_registr
 
 /// Run a single pipeline cycle: observe → detect → strategize → health.
 /// Shared by ingest_event and ingest_batch.
+#[allow(clippy::too_many_arguments)]
 async fn run_pipeline_cycle(
     state: &Arc<AppState>,
     session_id: &str,
@@ -1189,106 +1190,6 @@ fn estimate_tokens(s: &SessionState) -> (u64, u64) {
     (est_input, est_output)
 }
 
-/// Map a detection category string to the proper IssueCategory enum variant.
-/// This allows strategies to match on category-specific variants.
-fn detection_category_from_str(
-    cat: &str,
-    desc: &str,
-) -> forge_sdk::types::detection::IssueCategory {
-    match cat {
-        "loop" => forge_sdk::types::detection::IssueCategory::LoopDetected {
-            tool_name: desc.to_string(),
-            call_count: 4,
-            no_progress_turns: 4,
-        },
-        "stale_context" => forge_sdk::types::detection::IssueCategory::StaleContext {
-            file_path: desc.to_string(),
-            read_count: 1,
-            context_pressure: 0.9,
-        },
-        "cost_anomaly" => {
-            forge_sdk::types::detection::IssueCategory::CostAnomaly {
-                expected_cost: 0.01,
-                actual_cost: 0.05,
-                multiplier: 5.0,
-            }
-        }
-        "runaway_cost" => {
-            forge_sdk::types::detection::IssueCategory::RunawayCost { acceleration: 2.0 }
-        }
-        "secret_leak" => {
-            forge_sdk::types::detection::IssueCategory::SecretLeak {
-                secret_type: desc.to_string(),
-            }
-        }
-        "accuracy_risk" => {
-            forge_sdk::types::detection::IssueCategory::AccuracyRisk {
-                risk_factors: vec![desc.to_string()],
-            }
-        }
-        "compliance_gap" => {
-            forge_sdk::types::detection::IssueCategory::ComplianceGap {
-                gap_type: desc.to_string(),
-            }
-        }
-        "variety_collapse" => {
-            forge_sdk::types::detection::IssueCategory::VarietyCollapse {
-                similarity_score: 0.95,
-                agent_count: 1,
-            }
-        }
-        "model_mismatch" => {
-            forge_sdk::types::detection::IssueCategory::ModelMismatch {
-                task_complexity: "high".into(),
-                model_used: "unknown".into(),
-                suggested_model: "claude-sonnet-4-6".into(),
-            }
-        }
-        "deadlock" => {
-            forge_sdk::types::detection::IssueCategory::Deadlock {
-                agents: vec!["unknown".into()],
-                wait_duration_secs: 60,
-            }
-        }
-        "conversation_stall" => {
-            forge_sdk::types::detection::IssueCategory::ConversationStall {
-                duration_secs: 60,
-            }
-        }
-        "goal_drift" => {
-            forge_sdk::types::detection::IssueCategory::GoalDrift {
-                similarity_to_original: 0.3,
-            }
-        }
-        "hallucination" => {
-            forge_sdk::types::detection::IssueCategory::Hallucination {
-                reference: desc.to_string(),
-                reference_type: "file".into(),
-            }
-        }
-        "prompt_injection" => {
-            forge_sdk::types::detection::IssueCategory::PromptInjection {
-                pattern_matched: desc.to_string(),
-            }
-        }
-        "resource_exhaustion" => {
-            forge_sdk::types::detection::IssueCategory::ResourceExhaustion {
-                resource: desc.to_string(),
-                usage_pct: 95.0,
-            }
-        }
-        "output_degradation" => {
-            forge_sdk::types::detection::IssueCategory::OutputDegradation {
-                trend_slope: -0.5,
-                consecutive_declines: 3,
-            }
-        }
-        _ => forge_sdk::types::detection::IssueCategory::AccuracyRisk {
-            risk_factors: vec![format!("{}: {}", cat, desc)],
-        },
-    }
-}
-
 /// Map an agent class string (from hook envelope) to our AgentType string.
 fn map_agent_class(ac: &str) -> String {
     match ac.to_lowercase().as_str() {
@@ -1360,7 +1261,7 @@ fn compute_overall_health(dims: &forge_sdk::types::health::HealthDimensions) -> 
 /// This catches problems that formal detectors miss because observers produce sparse data.
 fn detect_from_events(
     s: &SessionState,
-    registry: &forge_harness::plugin_registry::PluginRegistry,
+    _registry: &forge_harness::plugin_registry::PluginRegistry,
 ) -> (Vec<Value>, Vec<Value>, Vec<Value>) {
     let mut detections = Vec::new();
     let mut strategies = Vec::new();
@@ -1628,7 +1529,7 @@ fn event_to_observation(event: &AgentEvent) -> Option<Value> {
             "msg_timestamp_ms": timestamp.timestamp_millis(),
             "cost_per_turn": result.token_count as f64 * 0.000003,  // rough estimate
         })),
-        AgentEvent::MessageSent { from, content, timestamp, .. } => {
+        AgentEvent::MessageSent { from: _, content, timestamp, .. } => {
             let text = match content {
                 forge_sdk::events::MessageContent::Text(t) => t.clone(),
                 _ => return None,
