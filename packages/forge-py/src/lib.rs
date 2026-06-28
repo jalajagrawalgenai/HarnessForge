@@ -304,7 +304,7 @@ fn serve(port: u16) {
 }
 
 #[pymodule]
-#[pyo3(name = "forge_sdk")]
+#[pyo3(name = "_forge_sdk")]
 fn _forge_sdk(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HarnessRunResult>()?;
     m.add_class::<PyHarness>()?;

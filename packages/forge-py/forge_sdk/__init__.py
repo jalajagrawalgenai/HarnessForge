@@ -92,7 +92,7 @@ if not os.path.exists(_marker):
     except Exception:
         pass
 
-from .forge_sdk import (
+from ._forge_sdk import (
     HarnessRunResult, PyHarness, create_harness, quick_run,
     list_presets, list_detectors, list_strategies, list_observers,
     get_version, serve,
