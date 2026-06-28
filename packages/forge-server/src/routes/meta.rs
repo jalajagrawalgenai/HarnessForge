@@ -19,7 +19,7 @@ pub async fn improve(
 
     if completed.is_empty() {
         return Json(json!({
-            "status": "no_data",
+            "status": "not_enough_data",
             "message": "No completed sessions to analyze. Run some agent sessions first.",
             "sessions_available": sessions.len(),
             "completed_sessions": 0,
