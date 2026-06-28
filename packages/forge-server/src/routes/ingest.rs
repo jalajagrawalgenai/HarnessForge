@@ -530,6 +530,104 @@ pub async fn ingest_transcript(
     }))
 }
 
+/// POST /api/v1/ingest/batch
+///
+/// Batch ingest for Cursor, Antigravity, and other agents without native hooks.
+/// Body: { "agentClass": "cursor", "events": [ { "hookName": "SessionStart", ... } ] }
+pub async fn ingest_batch(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let agent_class = body
+        .get("agentClass")
+        .and_then(|v| v.as_str())
+        .unwrap_or("default");
+    let events = body
+        .get("events")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut ingested = 0u64;
+
+    for ev in &events {
+        let hook_name = ev
+            .get("hookName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let session_id = ev
+            .get("sessionId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let agent_id = ev
+            .get("agentId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("root");
+        let tool_name = ev.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
+        let payload = ev.get("payload").cloned().unwrap_or(json!({}));
+        let flags = ev.get("flags").cloned().unwrap_or(json!({}));
+        let starts_session = flags
+            .get("startsSession")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let stops_session = flags
+            .get("stopsSession")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Auto-create session
+        let is_new = {
+            let sessions = state.store.read().await;
+            !sessions.contains_key(session_id)
+        };
+        if is_new {
+            let task = payload
+                .get("prompt")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(batch)")
+                .to_string();
+            let agent_type = map_agent_class(agent_class);
+            let session = SessionState::new(
+                session_id.to_string(),
+                task,
+                agent_type.clone(),
+                agent_type,
+            );
+            let mut sessions = state.store.write().await;
+            sessions.insert(session_id.to_string(), session);
+            tracing::info!(session_id = %session_id, agent_class = %agent_class, "Batch-created session");
+        }
+
+        let agent_event =
+            hook_to_agent_event(hook_name, agent_id, tool_name, &payload, 0);
+        if let Some(event) = agent_event {
+            let mut sessions = state.store.write().await;
+            if let Some(s) = sessions.get_mut(session_id) {
+                s.events.push(event.clone());
+                if s.events.len() > 1000 {
+                    s.events.remove(0);
+                }
+                s.event_count += 1;
+                let _ = s.event_broadcaster.send(event);
+                if starts_session && s.status == SessionStatus::Pending {
+                    s.status = SessionStatus::Running;
+                }
+                if stops_session {
+                    s.status = SessionStatus::Completed;
+                    s.completed_at = Some(Utc::now());
+                }
+            }
+            ingested += 1;
+        }
+    }
+
+    Json(json!({
+        "status": "ok",
+        "agentClass": agent_class,
+        "eventsReceived": events.len(),
+        "eventsIngested": ingested,
+    }))
+}
+
 /// GET /api/v1/ingest/status
 ///
 /// Returns ingestion stats: active sessions, event counts, pipeline metrics.

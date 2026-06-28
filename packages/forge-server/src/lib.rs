@@ -361,6 +361,10 @@ pub fn create_app(store: SharedSessionStore) -> Router {
             axum::routing::post(routes::ingest::ingest_transcript),
         )
         .route(
+            "/api/v1/ingest/batch",
+            axum::routing::post(routes::ingest::ingest_batch),
+        )
+        .route(
             "/api/v1/ingest/status",
             axum::routing::get(routes::ingest::ingest_status),
         )
