@@ -46,10 +46,39 @@ function renderRun() {
   document.getElementById('content').innerHTML =
     '<div class="card" style="border-left:3px solid var(--accent-green)"><h2>Live Monitoring</h2>' +
     '<div id="ingest-status"><p>Checking for agent activity...</p></div></div>' +
+    '<div class="card" id="cloud-connect-card"><h2>☁️ Cloud Session Setup</h2>' +
+    '<div id="cloud-info"><p>Loading connection info...</p></div></div>' +
     '<div class="card"><h2>Quick Stats</h2><div id="quick-stats"><p>Loading stats...</p></div></div>';
 
   checkIngestStatus();
+  showCloudInfo();
   refreshStats();
+}
+
+function showCloudInfo() {
+  var el = document.getElementById('cloud-info');
+  if (!el) return;
+  var hookUrl = window.location.origin + '/api/v1/ingest/event';
+  el.innerHTML =
+    '<div style="background:#1e1e2e;border-radius:8px;padding:12px;margin:8px 0">' +
+    '<p style="margin:0 0 8px 0;font-weight:600;color:var(--accent-blue)">Ingest Endpoint:</p>' +
+    '<code style="font-size:13px;word-break:break-all;color:var(--accent-green)">' + hookUrl + '</code>' +
+    '</div>' +
+    '<p style="margin:8px 0;font-size:13px;color:var(--text-secondary)">' +
+    '<strong>Local Claude Code:</strong> Already connected — hooks auto-registered in settings.json. ' +
+    'Events appear automatically.</p>' +
+    '<p style="margin:8px 0;font-size:13px;color:var(--text-secondary)">' +
+    '<strong>Cloud / Remote Claude Code:</strong> Set <code>FORGE_SERVER_URL</code> on the remote machine:</p>' +
+    '<div style="background:#1e1e2e;border-radius:8px;padding:12px;margin:8px 0;font-size:13px">' +
+    '<p style="margin:4px 0;color:var(--text-secondary)"># Option 1: Use a tunnel (ngrok / Cloudflare Tunnel)</p>' +
+    '<code style="color:var(--accent-blue)">ngrok http ' + window.location.port + '</code>' +
+    '<p style="margin:8px 0 4px 0;color:var(--text-secondary)"># Then on the cloud machine:</p>' +
+    '<code style="color:var(--accent-blue)">export FORGE_SERVER_URL=https://xxxx.ngrok.io</code>' +
+    '<p style="margin:12px 0 4px 0;color:var(--text-secondary)"># Option 2: Install Forge on the cloud machine too</p>' +
+    '<code style="color:var(--accent-blue)">pip install forge-agent-sdk && forge serve</code>' +
+    '</div>' +
+    '<p style="margin:8px 0;font-size:12px;color:var(--text-secondary)">' +
+    'After setup, run <code>forge doctor</code> on the cloud machine to verify connectivity.</p>';
 }
 
 function checkIngestStatus() {

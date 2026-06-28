@@ -13,14 +13,22 @@ import path from 'node:path';
 import os from 'node:os';
 
 // ── Config ──
-const PORT = (() => {
-  try {
-    const pf = path.join(os.homedir(), '.forge', 'port');
-    if (fs.existsSync(pf)) return parseInt(fs.readFileSync(pf, 'utf8').trim(), 10) || 3000;
-  } catch (_) {}
-  return parseInt(process.env.FORGE_SERVER_PORT, 10) || 3000;
+// FORGE_SERVER_URL overrides everything — use for cloud/remote setups.
+// Example: https://my-forge.ngrok.io or http://192.168.1.50:3001
+const INGEST_URL = (() => {
+  if (process.env.FORGE_SERVER_URL) {
+    const base = process.env.FORGE_SERVER_URL.replace(/\/+$/, '');
+    return `${base}/api/v1/ingest/event`;
+  }
+  const port = (() => {
+    try {
+      const pf = path.join(os.homedir(), '.forge', 'port');
+      if (fs.existsSync(pf)) return parseInt(fs.readFileSync(pf, 'utf8').trim(), 10) || 3000;
+    } catch (_) {}
+    return parseInt(process.env.FORGE_SERVER_PORT, 10) || 3000;
+  })();
+  return `http://127.0.0.1:${port}/api/v1/ingest/event`;
 })();
-const INGEST_URL = `http://127.0.0.1:${PORT}/api/v1/ingest/event`;
 
 // ── Fire-and-forget HTTP POST ──
 function postFireAndForget(data) {
