@@ -16,10 +16,82 @@ use tower_http::cors::CorsLayer;
 #[derive(Clone)]
 pub struct AppState {
     pub store: SharedSessionStore,
+    pub harness_config: std::sync::Arc<tokio::sync::RwLock<HarnessConfigState>>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct HarnessConfigState {
+    pub preset: String,
+    pub dry_run: bool,
+    pub enabled_observers: Vec<String>,
+    pub enabled_detectors: Vec<String>,
+    pub enabled_strategies: Vec<String>,
+}
+
+impl Default for HarnessConfigState {
+    fn default() -> Self {
+        Self {
+            preset: "claude-code".into(),
+            dry_run: false,
+            enabled_observers: vec![
+                "token".into(),
+                "latency".into(),
+                "cost".into(),
+                "accuracy".into(),
+                "security".into(),
+                "reliability".into(),
+                "context_quality".into(),
+                "orch".into(),
+                "comm".into(),
+                "compliance".into(),
+                "memory".into(),
+                "diversity".into(),
+            ],
+            enabled_detectors: vec![
+                "loop".into(),
+                "stale_context".into(),
+                "cost_anomaly".into(),
+                "deadlock".into(),
+                "hallucination".into(),
+                "prompt_injection".into(),
+                "secret_leak".into(),
+                "variety_collapse".into(),
+                "conversation_stall".into(),
+                "goal_drift".into(),
+                "model_mismatch".into(),
+                "accuracy_risk".into(),
+                "runaway_cost".into(),
+                "resource_exhaustion".into(),
+                "output_degradation".into(),
+                "compliance_gap".into(),
+            ],
+            enabled_strategies: vec![
+                "nudge".into(),
+                "compact".into(),
+                "pause".into(),
+                "escalate".into(),
+                "fork".into(),
+                "reroute".into(),
+                "rollback".into(),
+                "diversify".into(),
+                "isolate".into(),
+                "circuit_break".into(),
+                "replace".into(),
+                "interject".into(),
+                "degrade".into(),
+                "quarantine".into(),
+            ],
+        }
+    }
 }
 
 pub fn create_app(store: SharedSessionStore) -> Router {
-    let state = Arc::new(AppState { store });
+    let state = Arc::new(AppState {
+        store,
+        harness_config: std::sync::Arc::new(
+            tokio::sync::RwLock::new(HarnessConfigState::default()),
+        ),
+    });
 
     Router::new()
         .route("/api/v1/health", axum::routing::get(routes::health::get))

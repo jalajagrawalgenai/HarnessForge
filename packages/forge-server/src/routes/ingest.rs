@@ -112,13 +112,33 @@ pub async fn ingest_event(
     // ── Convert hook event to AgentEvent ──
     let agent_event = hook_to_agent_event(hook_name, agent_id, tool_name, &payload, timestamp);
 
-    // ── Build registry for this session's preset ──
+    // ── Build registry for this session's preset, filtered by harness config ──
     let registry = {
         let sessions = state.store.read().await;
-        sessions
+        let base_registry = sessions
             .get(session_id)
             .map(|s| build_registry_for_preset(&s.preset))
-            .unwrap_or_else(|| build_registry_for_preset("solo"))
+            .unwrap_or_else(|| build_registry_for_preset("solo"));
+
+        let cfg = state.harness_config.read().await;
+        // Filter to only enabled observers, detectors, strategies
+        let mut filtered = forge_harness::plugin_registry::PluginRegistry::new();
+        for obs in base_registry.observers() {
+            if cfg.enabled_observers.contains(&obs.name().to_string()) {
+                filtered.register_observer(obs.clone());
+            }
+        }
+        for det in base_registry.detectors() {
+            if cfg.enabled_detectors.contains(&det.name().to_string()) {
+                filtered.register_detector(det.clone());
+            }
+        }
+        for strat in base_registry.strategies() {
+            if cfg.enabled_strategies.contains(&strat.name().to_string()) {
+                filtered.register_strategy(strat.clone());
+            }
+        }
+        filtered
     };
 
     // ── Run the harness pipeline ──

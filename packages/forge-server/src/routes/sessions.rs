@@ -333,7 +333,143 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
 
 use chrono::Utc;
 
-/// Group observations by their dimension field, returning counts and latest samples.
+/// Translate a raw observation JSON value into a human-readable description.
+fn describe_observation(obs: &Value) -> String {
+    let dim = obs
+        .get("dimension")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    match dim {
+        "token" => {
+            let total = obs
+                .get("total_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let cache = obs
+                .get("cache_hit_rate")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            format!(
+                "Token usage: {} total tokens, {:.0}% cache hit rate",
+                total,
+                cache * 100.0
+            )
+        }
+        "latency" => {
+            let count = obs.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+            let p50 = obs.get("p50_ms").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let p95 = obs.get("p95_ms").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            format!(
+                "Latency: {} calls, p50={:.0}ms, p95={:.0}ms",
+                count, p50, p95
+            )
+        }
+        "cost" => {
+            let per_turn = obs
+                .get("cost_per_turn")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let total = obs
+                .get("total_cost")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            format!("Cost: ${:.4} per turn, ${:.4} total", per_turn, total)
+        }
+        "accuracy" => {
+            let lint = obs.get("lint_errors").and_then(|v| v.as_u64()).unwrap_or(0);
+            let tests = obs
+                .get("test_pass_rate")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            format!(
+                "Accuracy: {} lint errors, {:.0}% test pass rate",
+                lint,
+                tests * 100.0
+            )
+        }
+        "security" => {
+            let issues = obs
+                .get("issues_found")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let leaks = obs
+                .get("secret_leaks")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            format!(
+                "Security: {} issues, {} potential secret leaks",
+                issues, leaks
+            )
+        }
+        "reliability" => {
+            let ops = obs.get("total_ops").and_then(|v| v.as_u64()).unwrap_or(0);
+            let errors = obs
+                .get("error_rate")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            format!(
+                "Reliability: {} operations, {:.1}% error rate",
+                ops,
+                errors * 100.0
+            )
+        }
+        "context_quality" => {
+            let files = obs
+                .get("unique_files")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let redundancy = obs
+                .get("redundancy_ratio")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            format!(
+                "Context: {} unique files tracked, {:.0}% redundancy",
+                files,
+                redundancy * 100.0
+            )
+        }
+        "orch" => {
+            let agents = obs
+                .get("active_agents")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let forks = obs.get("total_forks").and_then(|v| v.as_u64()).unwrap_or(0);
+            format!("Orchestration: {} agents, {} forks", agents, forks)
+        }
+        "compliance" => {
+            let violations = obs.get("violations").and_then(|v| v.as_u64()).unwrap_or(0);
+            format!("Compliance: {} policy violations detected", violations)
+        }
+        "comm" => {
+            let msgs = obs
+                .get("message_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            format!("Communication: {} agent messages", msgs)
+        }
+        "memory" => {
+            let usage = obs.get("usage_pct").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            format!("Memory: {:.0}% context window used", usage * 100.0)
+        }
+        "diversity" => {
+            let score = obs
+                .get("similarity_score")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            format!(
+                "Diversity: {:.0}% output similarity (lower is better)",
+                score * 100.0
+            )
+        }
+        _ => format!(
+            "{}: {}",
+            dim,
+            serde_json::to_string(obs).unwrap_or_default()
+        ),
+    }
+}
+
+/// Group observations by their dimension field, returning counts and human-readable summaries.
 fn group_observations_by_dimension(observations: &[Value]) -> Value {
     use std::collections::HashMap;
     let mut groups: HashMap<String, Vec<&Value>> = HashMap::new();
@@ -347,9 +483,14 @@ fn group_observations_by_dimension(observations: &[Value]) -> Value {
         .map(|(dim, items)| {
             let count = items.len();
             let latest = items.last().cloned();
+            let description = latest
+                .as_ref()
+                .map(|v| describe_observation(v))
+                .unwrap_or_else(|| format!("{}: no data", dim));
             json!({
                 "dimension": dim,
                 "count": count,
+                "description": description,
                 "latest": latest,
                 "samples": items.iter().rev().take(5).cloned().collect::<Vec<_>>(),
             })

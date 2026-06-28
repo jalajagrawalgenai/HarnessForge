@@ -215,11 +215,15 @@ function renderFullAnalysis(a, raw, id) {
 
   var recsHtml = recs.length > 0 ? recs.map(function(r) { return '<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)">💡 ' + r + '</div>'; }).join('') : '<div style="font-size:13px;color:var(--accent-green)">✅ No issues — agent running optimally</div>';
 
-  // Observation details grouped by dimension
+  // Observation details grouped by dimension (human-readable)
   var obsDetails = a.observation_details || [];
+  var dimNames = {token:'Token Efficiency',latency:'Latency',cost:'Cost',accuracy:'Accuracy',security:'Security',reliability:'Reliability',context_quality:'Context Quality',orch:'Orchestration',comm:'Communication',compliance:'Compliance',memory:'Memory',diversity:'Diversity'};
   var obsHtml = obsDetails.length > 0 ? obsDetails.map(function(g) {
-    var samples = (g.samples||[]).map(function(s) { return '<div style="font-size:10px;color:var(--text-secondary);padding:2px 0;border-bottom:1px solid var(--border);font-family:monospace">' + JSON.stringify(s).substring(0,120) + '</div>'; }).join('');
-    return '<div style="margin:4px 0;padding:6px;background:var(--bg-secondary);border-radius:4px"><strong style="font-size:12px;color:var(--accent-green)">' + (g.dimension||'?') + '</strong> <span style="font-size:11px;color:var(--text-secondary)">(' + (g.count||0) + ' readings)</span>' + samples + '</div>';
+    return '<div style="margin:6px 0;padding:8px;background:var(--bg-secondary);border-radius:6px;border-left:3px solid var(--accent-green)">' +
+      '<strong style="font-size:13px;color:var(--accent-green)">' + (dimNames[g.dimension]||g.dimension) + '</strong>' +
+      ' <span style="font-size:11px;color:var(--text-secondary)">· ' + (g.count||0) + ' readings</span>' +
+      '<p style="margin:4px 0;font-size:12px;color:var(--text-primary)">' + (g.description||'No data') + '</p>' +
+      '</div>';
   }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No observation data yet — more events needed</p>';
 
   // Detection details
