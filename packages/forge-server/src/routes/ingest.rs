@@ -286,7 +286,7 @@ pub async fn ingest_event(
         }
     }
 
-    // ── Update session status based on flags ──
+    // ── Update session status and cumulative analysis ──
     {
         let mut sessions = state.store.write().await;
         if let Some(s) = sessions.get_mut(session_id) {
@@ -296,10 +296,90 @@ pub async fn ingest_event(
             if stops_session {
                 s.status = SessionStatus::Completed;
                 s.completed_at = Some(Utc::now());
+                // Record stop reason from payload
+                s.stop_reason = payload
+                    .get("stop_reason")
+                    .or(payload.get("reason"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+                    .or_else(|| Some(format!("Session ended via {}", hook_name)));
+            }
+            if hook_name == "StopFailure" {
+                s.status = SessionStatus::Failed;
+                s.completed_at = Some(Utc::now());
+                s.stop_reason = payload.get("error")
+                    .and_then(|v| v.as_str())
+                    .map(|e| format!("Failed: {}", e));
             }
             if let Some(prompt) = payload.get("prompt").and_then(|v| v.as_str()) {
                 if s.task == "(live agent session)" && !prompt.is_empty() {
                     s.task = prompt.to_string();
+                }
+            }
+
+            // ── Cumulative analysis tracking ──
+            match hook_name {
+                "UserPromptSubmit" => {
+                    s.user_prompt_count += 1;
+                }
+                "PostToolUse" => {
+                    let tool = if tool_name.is_empty() {
+                        payload.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown")
+                    } else {
+                        tool_name
+                    };
+                    *s.tool_counts.entry(tool.to_string()).or_insert(0) += 1;
+
+                    // Track errors
+                    if payload.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        *s.tool_errors.entry(tool.to_string()).or_insert(0) += 1;
+                    }
+
+                    // Track tool duration from payload
+                    if let Some(ms) = payload.get("duration_ms").and_then(|v| v.as_u64()) {
+                        s.total_tool_ms += ms;
+                    }
+
+                    // Track tokens from tool response
+                    if let Some(usage) = payload.get("usage") {
+                        if let Some(input) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
+                            s.total_input_tokens += input;
+                        }
+                        if let Some(output) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
+                            s.total_output_tokens += output;
+                        }
+                    }
+                }
+                "PostToolUseFailure" => {
+                    let tool = if tool_name.is_empty() {
+                        payload.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown")
+                    } else {
+                        tool_name
+                    };
+                    *s.tool_errors.entry(tool.to_string()).or_insert(0) += 1;
+                    *s.tool_counts.entry(tool.to_string()).or_insert(0) += 1;
+                }
+                "PreCompact" => {
+                    if let Some(ratio) = payload.get("context_ratio").and_then(|v| v.as_f64()) {
+                        s.context_pressure_history.push(ratio);
+                    }
+                }
+                "SubagentStart" => {
+                    s.subagent_count += 1;
+                }
+                _ => {}
+            }
+
+            // Track tokens from transcript-style events
+            if let Some(ref event) = agent_event {
+                if let AgentEvent::TokenUsage { input, output, cache_read, cache_write, model, .. } = event {
+                    s.total_input_tokens += input;
+                    s.total_output_tokens += output;
+                    s.total_cache_read += cache_read;
+                    s.total_cache_write += cache_write;
+                    if s.model_name.is_none() && !model.is_empty() && model != "unknown" {
+                        s.model_name = Some(model.clone());
+                    }
                 }
             }
         }

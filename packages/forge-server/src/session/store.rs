@@ -68,6 +68,35 @@ pub struct SessionState {
     pub interventions: Vec<serde_json::Value>,
     /// Count of events ingested (used for cycle scheduling)
     pub event_count: u64,
+    // ── Cumulative analysis state ──
+    /// Total input tokens across all turns
+    pub total_input_tokens: u64,
+    /// Total output tokens across all turns
+    pub total_output_tokens: u64,
+    /// Total cache read tokens
+    pub total_cache_read: u64,
+    /// Total cache write tokens
+    pub total_cache_write: u64,
+    /// Per-tool call counts
+    pub tool_counts: HashMap<String, u64>,
+    /// Per-tool error counts
+    pub tool_errors: HashMap<String, u64>,
+    /// Total tool call duration in ms
+    pub total_tool_ms: u64,
+    /// Context pressure readings over time
+    pub context_pressure_history: Vec<f64>,
+    /// Repeated tool call patterns detected (tool_name:repeat_count)
+    pub loop_patterns: Vec<String>,
+    /// Degradation warnings collected during session
+    pub degradation_warnings: Vec<String>,
+    /// Model name(s) detected
+    pub model_name: Option<String>,
+    /// Why the session stopped
+    pub stop_reason: Option<String>,
+    /// Number of subagents forked
+    pub subagent_count: u64,
+    /// User prompt count
+    pub user_prompt_count: u64,
 }
 
 /// Thread-safe shared session store.
@@ -103,6 +132,20 @@ impl SessionState {
             strategy_results: Vec::new(),
             interventions: Vec::new(),
             event_count: 0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read: 0,
+            total_cache_write: 0,
+            tool_counts: HashMap::new(),
+            tool_errors: HashMap::new(),
+            total_tool_ms: 0,
+            context_pressure_history: Vec::new(),
+            loop_patterns: Vec::new(),
+            degradation_warnings: Vec::new(),
+            model_name: None,
+            stop_reason: None,
+            subagent_count: 0,
+            user_prompt_count: 0,
         }
     }
 }

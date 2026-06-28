@@ -153,86 +153,151 @@ function refreshStats() {
 function showLive(id) {
   currentPage = 'live';
   document.getElementById('content').innerHTML =
-    '<div class="live-layout">' +
-    '<div class="panel"><h2>Session: ' + id.substring(0,12) + '</h2>' +
-    '<div id="session-meta"><p>Loading session data...</p></div>' +
-    '<div class="flex-row mb"><button onclick="doPause(\'' + id + '\')">Pause</button><button onclick="doResume(\'' + id + '\')">Resume</button></div>' +
-    '<div class="conversation" id="stream" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:13px"><p>Connecting to live stream...</p></div></div>' +
-    '<div class="panel"><h3>Health Scores</h3><div id="gauges"><p>Loading...</p></div>' +
-    '<div id="pipeline-summary" style="margin-top:12px"></div></div></div>';
+    '<div style="max-width:1200px;margin:0 auto">' +
+    '<div id="live-header"><p>Loading harness analysis...</p></div>' +
+    '<div id="live-body"></div></div>';
 
-  // Load session data
-  api('/v1/sessions/' + id).then(function(s) {
-    // Update meta
-    var hs = s.health_score;
-    var healthColor = hs && hs.overall > 0.8 ? 'var(--accent-green)' : hs && hs.overall > 0.5 ? 'var(--accent-yellow)' : 'var(--accent-red)';
-    document.getElementById('session-meta').innerHTML =
-      '<p><strong>Task:</strong> ' + (s.task||'') + ' | <strong>Agent:</strong> ' + (s.agent_type||'') +
-      ' | <strong>Status:</strong> <span class="badge badge-' + (s.status||'pending') + '">' + s.status + '</span>' +
-      ' | <strong>Health:</strong> <span style="color:' + healthColor + ';font-weight:600">' + (hs ? Math.round(hs.overall*100) + '%' : 'N/A') + '</span></p>';
-
-    // Update health gauges with real values
-    if (hs && hs.dimensions) {
-      var dims = hs.dimensions;
-      var gaugeNames = [
-        ['Token', dims.token_efficiency],
-        ['Latency', dims.latency],
-        ['Cost', dims.cost],
-        ['Accuracy', dims.accuracy],
-        ['Security', dims.security],
-        ['Reliability', dims.reliability],
-        ['Context', dims.context_quality],
-        ['Orch', dims.orchestration],
-        ['Compliance', dims.compliance]
-      ];
-      document.getElementById('gauges').innerHTML = gaugeNames.map(function(g) {
-        var pct = Math.round(g[1] * 100);
-        var gColor = g[1] > 0.8 ? 'gauge-green' : g[1] > 0.5 ? 'gauge-yellow' : 'gauge-red';
-        return '<div class="gauge"><div class="gauge-label">' + g[0] + ' <span style="font-size:11px">' + pct + '%</span></div>' +
-          '<div class="gauge-bar"><div class="gauge-fill ' + gColor + '" style="width:' + pct + '%"></div></div></div>';
-      }).join('');
+  // Fetch full analysis
+  api('/v1/sessions/' + id + '/analysis').then(function(a) {
+    if (a.error) {
+      document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + a.error + '</p></div>';
+      return;
     }
+    renderHarnessAnalysis(a, id);
+  }).catch(function(e) {
+    document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + e.message + '</p></div>';
+  });
+}
 
-    // Show pipeline summary
-    var pipe = s.pipeline || {};
-    var dets = pipe.detections || [];
-    var ivs = pipe.interventions || [];
-    var obs = pipe.observations || [];
-    document.getElementById('pipeline-summary').innerHTML =
-      '<div style="font-size:13px;color:var(--text-secondary)">' +
-      '<strong>Pipeline:</strong> ' + obs.length + ' observations | ' + dets.length + ' detections | ' + ivs.length + ' interventions' +
-      (dets.length > 0 ? '<div style="margin-top:8px;color:var(--accent-yellow)">⚠ Detections: ' + dets.map(function(d) { return d.category || ''; }).join(', ') + '</div>' : '') +
-      (ivs.length > 0 ? '<div style="margin-top:4px;color:var(--accent-green)">🔧 Interventions: ' + ivs.length + ' applied</div>' : '') +
-      '</div>';
-  }).catch(function() {});
+function renderHarnessAnalysis(a, id) {
+  var hs = a.health_analysis || {};
+  var tk = a.token_analysis || {};
+  var tl = a.tool_analysis || {};
+  var cx = a.context_analysis || {};
+  var lp = a.loop_analysis || {};
+  var dg = a.degradation_analysis || {};
+  var sm = a.session_summary || {};
+  var recs = a.recommendations || [];
 
-  // Connect WebSocket for live events
-  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  var ws = new WebSocket(proto + '//' + location.host + '/ws');
-  ws.onopen = function() { ws.send(JSON.stringify({action:'subscribe', session_id:id})); };
-  ws.onmessage = function(evt) {
-    try {
-      var e = JSON.parse(evt.data);
-      var el = document.getElementById('stream');
-      var t = e.type || (e.hookName ? 'hook' : 'unknown');
-      var txt = '';
-      if (t === 'started') txt = '>> ' + (e.task || '');
-      else if (t === 'thinking_start') txt = 'Thinking...';
-      else if (t === 'thinking_delta') txt = e.text || '';
-      else if (t === 'tool_call_start') txt = '> ' + (e.tool||'') + ': ' + JSON.stringify(e.args||{});
-      else if (t === 'tool_call_end') txt = '< ' + (e.tool||'') + ' done';
-      else if (t === 'completed') txt = 'OK Completed: ' + (e.summary||'');
-      else if (t === 'failed') txt = 'XX Failed: ' + (e.error||'');
-      else if (t === 'hook') txt = '[' + (e.hookName||'event') + '] ' + (e.toolName||'');
-      else txt = JSON.stringify(e);
-      var div = document.createElement('div');
-      div.style.padding = '2px 0';
-      div.style.borderBottom = '1px solid var(--border)';
-      div.textContent = txt;
-      el.appendChild(div);
-      el.scrollTop = el.scrollHeight;
-    } catch(ex) {}
-  };
+  var healthPct = Math.round((hs.overall||0) * 100);
+  var healthColor = healthPct > 80 ? 'var(--accent-green)' : healthPct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+  var healthEmoji = healthPct > 80 ? '🟢' : healthPct > 50 ? '🟡' : healthPct > 30 ? '🟠' : '🔴';
+
+  // Tool breakdown rows
+  var toolRows = (tl.breakdown||[]).map(function(t) {
+    return '<tr><td><strong>' + t.tool + '</strong></td><td>' + t.calls + '</td><td>' + (t.errors > 0 ? '<span style="color:var(--accent-red)">' + t.errors + '</span>' : '0') + '</td><td>' + (t.error_rate_pct||0).toFixed(1) + '%</td><td>' + (t.pct_of_total||0).toFixed(1) + '%</td></tr>';
+  }).join('');
+
+  // Dimension gauges
+  var dims = hs.dimensions || {};
+  var gaugeHtml = [
+    ['Token Efficiency', dims.token_efficiency || 1, 'Cache hit rate & token reuse'],
+    ['Latency', dims.latency || 1, 'Response time health'],
+    ['Cost Efficiency', dims.cost || 1, 'Cost per turn vs baseline'],
+    ['Accuracy', dims.accuracy || 1, 'Output correctness signals'],
+    ['Security', dims.security || 1, 'Secret leaks & injection risks'],
+    ['Reliability', dims.reliability || 1, 'Error rate & success ratio'],
+    ['Context Quality', dims.context_quality || 1, 'Pressure & redundancy'],
+    ['Orchestration', dims.orchestration || 1, 'Multi-agent coordination'],
+    ['Compliance', dims.compliance || 1, 'Framework alignment']
+  ].map(function(g) {
+    var pct = Math.round(g[1] * 100);
+    var gColor = g[1] > 0.8 ? 'gauge-green' : g[1] > 0.5 ? 'gauge-yellow' : 'gauge-red';
+    return '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>' + g[0] + '</span><span style="color:' + gColor + '">' + pct + '%</span></div>' +
+      '<div class="gauge-bar" style="height:6px;border-radius:3px"><div class="gauge-fill ' + gColor + '" style="width:' + pct + '%;height:100%;border-radius:3px"></div></div>' +
+      '<div style="font-size:10px;color:var(--text-secondary)">' + g[2] + '</div></div>';
+  }).join('');
+
+  // Detections with severity
+  var detectionHtml = (sm.detections > 0) ?
+    '<div style="color:var(--accent-yellow)">⚠ ' + sm.detections + ' issues detected</div>' :
+    '<div style="color:var(--accent-green)">✅ No issues detected</div>';
+
+  var interventionHtml = (sm.interventions > 0) ?
+    '<div style="color:var(--accent-green)">🔧 ' + sm.interventions + ' interventions applied</div>' :
+    '<div style="color:var(--text-secondary)">No interventions needed</div>';
+
+  // Recommendations
+  var recsHtml = recs.length > 0 ? recs.map(function(r) {
+    return '<div style="padding:4px 0;font-size:13px;border-bottom:1px solid var(--border)">💡 ' + r + '</div>';
+  }).join('') : '<div style="font-size:13px;color:var(--text-secondary)">No recommendations — agent is running optimally</div>';
+
+  document.getElementById('live-header').innerHTML =
+    '<div class="card" style="border-left:4px solid ' + healthColor + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
+    '<div><h2 style="margin:0">' + healthEmoji + ' ' + (a.task||'Untitled').substring(0,50) + '</h2>' +
+    '<p style="margin:4px 0;color:var(--text-secondary)">' + a.agent_type + ' · ' + (a.model||'unknown') + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + '</p></div>' +
+    '<div style="text-align:right"><div style="font-size:36px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Harness Health</div></div>' +
+    '</div>' +
+    '<div style="margin-top:8px;padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:13px">' +
+    '<strong>Stop Analysis:</strong> ' + (a.stop_analysis||'N/A') + '</div>' +
+    '<div style="margin-top:4px;padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:13px">' +
+    '<strong>Verdict:</strong> ' + (a.health_verdict||'N/A') + '</div></div>';
+
+  document.getElementById('live-body').innerHTML =
+    // ── LAYER 1: OBSERVE ──
+    '<div class="card" style="border-left:4px solid var(--accent-green)"><h3>🔍 LAYER 1: OBSERVE — 12 Real-Time Watchers</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Total Tokens</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(1) + '%</div><div class="stat-label">Cache Hit Rate</div></div>' +
+    '<div class="stat-card"><div class="stat-value">$' + (tk.estimated_cost_usd||0).toFixed(4) + '</div><div class="stat-label">Est. Cost</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.total_events||0) + '</div><div class="stat-label">Events</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.user_prompts||0) + '</div><div class="stat-label">User Prompts</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.subagents_spawned||0) + '</div><div class="stat-label">Subagents</div></div>' +
+    '</div>' +
+    '<div style="margin-top:12px"><h4>Dimension Scores</h4>' + gaugeHtml + '</div></div>' +
+
+    // ── LAYER 2: DETECT ──
+    '<div class="card" style="border-left:4px solid var(--accent-yellow)"><h3>⚠ LAYER 2: DETECT — 16 Issue Detectors</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
+    '<div class="stat-card"><div class="stat-value" style="color:' + (sm.detections > 0 ? 'var(--accent-red)' : 'var(--accent-green)') + '">' + (sm.detections||0) + '</div><div class="stat-label">Issues Found</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (lp.patterns_detected||0) + '</div><div class="stat-label">Loops</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (dg.warnings||0) + '</div><div class="stat-label">Degradations</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '">' + (cx.status||'healthy') + '</div><div class="stat-label">Context</div></div>' +
+    '</div>' +
+    detectionHtml + '</div>' +
+
+    // ── LAYER 3: ACTION ──
+    '<div class="card" style="border-left:4px solid var(--accent-blue)"><h3>🔧 LAYER 3: ACTION — 14 Intervention Strategies</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">' +
+    '<div class="stat-card"><div class="stat-value" style="color:' + (sm.interventions > 0 ? 'var(--accent-green)' : 'var(--text-secondary)') + '">' + (sm.interventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.observations||0) + '</div><div class="stat-label">Observations</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tl.total_calls||0) + '</div><div class="stat-label">Tool Calls</div></div>' +
+    '</div>' +
+    interventionHtml + '</div>' +
+
+    // ── LAYER 4: META ──
+    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 LAYER 4: META — Self-Improvement</h3>' +
+    recsHtml + '</div>' +
+
+    // ── TOOL USAGE DETAIL ──
+    '<div class="card"><h3>🛠️ Tool Usage Breakdown</h3>' +
+    '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Error Rate</th><th>% of Total</th></tr></thead><tbody>' +
+    (toolRows || '<tr><td colspan="5">No tool calls recorded</td></tr>') + '</tbody></table></div>' +
+
+    // ── TOKEN DETAIL ──
+    '<div class="card"><h3>📊 Token Analysis</h3>' +
+    '<table style="font-size:13px"><tr><td>Input Tokens</td><td><strong>' + (tk.input_tokens||0).toLocaleString() + '</strong></td><td>Cache Read</td><td><strong>' + (tk.cache_read_tokens||0).toLocaleString() + '</strong></td></tr>' +
+    '<tr><td>Output Tokens</td><td><strong>' + (tk.output_tokens||0).toLocaleString() + '</strong></td><td>Cache Write</td><td><strong>' + (tk.cache_write_tokens||0).toLocaleString() + '</strong></td></tr>' +
+    '<tr><td>Total</td><td><strong>' + (tk.total_tokens||0).toLocaleString() + '</strong></td><td>Cache Hit</td><td><strong>' + (tk.cache_hit_pct||0).toFixed(1) + '%</strong></td></tr>' +
+    '<tr><td>Est. Cost</td><td><strong>$' + (tk.estimated_cost_usd||0).toFixed(5) + '</strong></td><td>Efficiency</td><td><strong>' + (tk.token_efficiency||0).toFixed(1) + '%</strong></td></tr></table></div>' +
+
+    // ── CONTEXT DETAIL ──
+    '<div class="card"><h3>📐 Context Pressure</h3>' +
+    '<p>Compaction events: <strong>' + (cx.compaction_events||0) + '</strong> | Avg pressure: <strong>' + (cx.avg_pressure_pct||0).toFixed(1) + '%</strong> | Max: <strong>' + (cx.max_pressure_pct||0).toFixed(1) + '%</strong> | Status: <span style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '"><strong>' + (cx.status||'healthy') + '</strong></span></p></div>' +
+
+    // ── REFRESH & ACTIONS ──
+    '<div class="flex-row mb" style="margin-top:16px">' +
+    '<button onclick="showLive(\'' + id + '\')">🔄 Refresh Analysis</button>' +
+    '<button onclick="doPause(\'' + id + '\')">⏸ Pause</button>' +
+    '<button onclick="doResume(\'' + id + '\')">▶ Resume</button>' +
+    '<button onclick="showPage(\'sessions\')">← Back to Sessions</button></div>';
+}
+
+function formatDuration(secs) {
+  if (secs < 60) return secs + 's';
+  if (secs < 3600) return Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+  return Math.floor(secs/3600) + 'h ' + Math.floor((secs%3600)/60) + 'm';
 }
 
 function doPause(id) { api('/v1/sessions/' + id + '/pause', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); }

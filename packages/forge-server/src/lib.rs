@@ -41,6 +41,10 @@ pub fn create_app(store: SharedSessionStore) -> Router {
             axum::routing::get(routes::stream::session_stream),
         )
         .route(
+            "/api/v1/sessions/{id}/analysis",
+            axum::routing::get(routes::sessions::analysis),
+        )
+        .route(
             "/api/v1/sessions/{id}/checkpoints",
             axum::routing::get(routes::sessions::checkpoints),
         )
