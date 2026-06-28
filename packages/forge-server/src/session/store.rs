@@ -107,6 +107,112 @@ pub fn new_store() -> SharedSessionStore {
     Arc::new(RwLock::new(HashMap::new()))
 }
 
+/// Persist all sessions to JSON files in ~/.forge/sessions/
+pub async fn save_sessions(store: &SharedSessionStore) {
+    let sessions = store.read().await;
+    let dir = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".forge")
+        .join("sessions");
+    let _ = std::fs::create_dir_all(&dir);
+
+    for (id, s) in sessions.iter() {
+        let path = dir.join(format!("{}.json", id));
+        // Serialize key fields to JSON
+        let data = serde_json::json!({
+            "id": s.id,
+            "task": s.task,
+            "agent_type": s.agent_type,
+            "preset": s.preset,
+            "status": s.status,
+            "created_at": s.created_at.to_rfc3339(),
+            "completed_at": s.completed_at.map(|t| t.to_rfc3339()),
+            "event_count": s.event_count,
+            "total_input_tokens": s.total_input_tokens,
+            "total_output_tokens": s.total_output_tokens,
+            "total_cache_read": s.total_cache_read,
+            "total_cache_write": s.total_cache_write,
+            "tool_counts": s.tool_counts,
+            "tool_errors": s.tool_errors,
+            "context_pressure_history": s.context_pressure_history,
+            "model_name": s.model_name,
+            "stop_reason": s.stop_reason,
+            "subagent_count": s.subagent_count,
+            "user_prompt_count": s.user_prompt_count,
+            "observations_count": s.observations.len(),
+            "detections_count": s.detections.len(),
+            "interventions_count": s.interventions.len(),
+            "health_score": s.health_score,
+        });
+        let _ = std::fs::write(&path, serde_json::to_string_pretty(&data).unwrap_or_default());
+    }
+}
+
+/// Load persisted sessions from ~/.forge/sessions/
+pub async fn load_sessions(store: &SharedSessionStore) -> u64 {
+    let dir = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".forge")
+        .join("sessions");
+    if !dir.exists() {
+        return 0;
+    }
+    let mut count = 0u64;
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e != "json").unwrap_or(true) {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&content) {
+                    let id = data["id"].as_str().unwrap_or("").to_string();
+                    let task = data["task"].as_str().unwrap_or("").to_string();
+                    let agent_type = data["agent_type"].as_str().unwrap_or("solo").to_string();
+                    let preset = data["preset"].as_str().unwrap_or("solo").to_string();
+                    let mut session = SessionState::new(id.clone(), task, agent_type, preset);
+                    session.event_count = data["event_count"].as_u64().unwrap_or(0);
+                    session.total_input_tokens = data["total_input_tokens"].as_u64().unwrap_or(0);
+                    session.total_output_tokens = data["total_output_tokens"].as_u64().unwrap_or(0);
+                    session.total_cache_read = data["total_cache_read"].as_u64().unwrap_or(0);
+                    session.total_cache_write = data["total_cache_write"].as_u64().unwrap_or(0);
+                    session.model_name = data["model_name"].as_str().map(String::from);
+                    session.stop_reason = data["stop_reason"].as_str().map(String::from);
+                    session.subagent_count = data["subagent_count"].as_u64().unwrap_or(0);
+                    session.user_prompt_count = data["user_prompt_count"].as_u64().unwrap_or(0);
+                    if let Some(hs) = &data["health_score"].as_object() {
+                        session.health_score = serde_json::from_value(data["health_score"].clone()).ok();
+                    }
+                    // Restore status
+                    if let Some(status_str) = data["status"].as_str() {
+                        session.status = match status_str {
+                            "running" => SessionStatus::Running,
+                            "completed" => SessionStatus::Completed,
+                            "failed" => SessionStatus::Failed,
+                            "paused" => SessionStatus::Paused,
+                            _ => SessionStatus::Pending,
+                        };
+                    }
+                    let mut sessions = store.write().await;
+                    sessions.insert(id, session);
+                    count += 1;
+                }
+            }
+        }
+    }
+    count
+}
+
+// Add dirs dependency — use home_dir helper
+mod dirs {
+    pub fn home_dir() -> Option<std::path::PathBuf> {
+        std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .map(std::path::PathBuf::from)
+            .ok()
+    }
+}
+
 impl SessionState {
     /// Create a new session state with fresh channels.
     pub fn new(id: String, task: String, agent_type: String, preset: String) -> Self {

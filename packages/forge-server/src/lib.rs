@@ -411,7 +411,23 @@ async fn serve_js() -> impl IntoResponse {
 
 pub async fn run_server(start_port: u16) {
     let store = session::store::new_store();
-    let app = create_app(store);
+
+    // Load historical sessions
+    let loaded = session::store::load_sessions(&store).await;
+    if loaded > 0 {
+        println!("Loaded {} historical sessions", loaded);
+    }
+
+    let app = create_app(store.clone());
+    let save_store = store.clone();
+
+    // Auto-save every 30s
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            session::store::save_sessions(&save_store).await;
+        }
+    });
 
     // Try ports starting from start_port, find the first available one
     let mut port = start_port;
@@ -445,11 +461,23 @@ pub async fn run_server(start_port: u16) {
     println!();
     tracing::info!("Forge server started on http://{}", addr);
 
+    // Auto-save sessions every 30 seconds
+    let save_store = store.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            session::store::save_sessions(&save_store).await;
+        }
+    });
+
+    let shutdown_store = store.clone();
     axum::serve(listener, app)
-        .with_graceful_shutdown(async {
+        .with_graceful_shutdown(async move {
             tokio::signal::ctrl_c().await.ok();
             println!();
-            println!("Shutting down...");
+            println!("Saving sessions before exit...");
+            let _ = session::store::save_sessions(&shutdown_store).await;
+            println!("Shutdown complete.");
         })
         .await
         .unwrap();

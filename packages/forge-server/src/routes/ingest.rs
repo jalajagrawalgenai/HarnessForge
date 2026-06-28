@@ -195,6 +195,7 @@ pub async fn ingest_event(
         };
 
         if should_detect {
+            // Run both formal detectors AND direct event-based detection
             let observations_snapshot = {
                 let sessions = state.store.read().await;
                 sessions
@@ -203,6 +204,7 @@ pub async fn ingest_event(
                     .unwrap_or_default()
             };
 
+            // 1. Formal detectors (use observer output)
             for detector in registry.detectors() {
                 let found = detector.detect(agent_id, &observations_snapshot).await;
                 for issue in &found {
@@ -212,8 +214,6 @@ pub async fn ingest_event(
                         "confidence": issue.confidence,
                         "description": issue.description,
                     }));
-
-                    // ── 4. STRATEGIZE: Run strategies for each detection ──
                     for strategy in registry.strategies() {
                         if let Some(result) = strategy.evaluate(issue).await {
                             new_strategies.push(serde_json::json!({
@@ -225,11 +225,24 @@ pub async fn ingest_event(
                                 "strategy": strategy.name(),
                                 "action": format!("{:?}", result.intervention),
                             }));
-                            break; // First matching strategy wins
+                            break;
                         }
                     }
                 }
             }
+
+            // 2. Direct event-based detection (works on raw event patterns)
+            let (direct_detections, direct_strategies, direct_interventions) = {
+                let sessions = state.store.read().await;
+                if let Some(s) = sessions.get(session_id) {
+                    detect_from_events(s, &registry)
+                } else {
+                    (vec![], vec![], vec![])
+                }
+            };
+            new_detections.extend(direct_detections);
+            new_strategies.extend(direct_strategies);
+            new_interventions.extend(direct_interventions);
 
             // Store detections, strategies, and interventions (as JSON for API)
             {
@@ -731,6 +744,117 @@ fn compute_overall_health(dims: &forge_sdk::types::health::HealthDimensions) -> 
     } else {
         1.0
     }
+}
+
+/// Direct event-based detection — analyzes raw event patterns to find issues.
+/// This catches problems that formal detectors miss because observers produce sparse data.
+fn detect_from_events(
+    s: &SessionState,
+    registry: &forge_harness::plugin_registry::PluginRegistry,
+) -> (Vec<Value>, Vec<Value>, Vec<Value>) {
+    let mut detections = Vec::new();
+    let mut strategies = Vec::new();
+    let mut interventions = Vec::new();
+
+    // ── LOOP DETECTION: same tool called 3+ times consecutively ──
+    let mut last_tool = String::new();
+    let mut repeat_count = 0u32;
+    for ev in &s.events {
+        let tool = serde_json::to_value(ev)
+            .ok()
+            .and_then(|v| v.get("tool").cloned())
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        if !tool.is_empty() && tool == last_tool {
+            repeat_count += 1;
+        } else {
+            if repeat_count >= 3 {
+                detections.push(json!({
+                    "category": "loop",
+                    "severity": "Warning",
+                    "confidence": 0.85,
+                    "description": format!("Loop detected: '{}' called {} times consecutively — agent may be stuck", last_tool, repeat_count + 1),
+                }));
+                strategies.push(json!({
+                    "strategy": "nudge",
+                    "detection": "loop",
+                    "intervention": format!("Nudge: suggest trying a different approach instead of repeating {}", last_tool),
+                }));
+            }
+            last_tool = tool;
+            repeat_count = 0;
+        }
+    }
+
+    // ── CONTEXT PRESSURE: check if context is critically high ──
+    if let Some(&last_pressure) = s.context_pressure_history.last() {
+        if last_pressure > 0.85 {
+            detections.push(json!({
+                "category": "stale_context",
+                "severity": if last_pressure > 0.95 { "Critical" } else { "Warning" },
+                "confidence": last_pressure,
+                "description": format!("Context pressure at {:.0}% — agent may be losing track of earlier context. Consider compacting or starting fresh.", last_pressure * 100.0),
+            }));
+            strategies.push(json!({
+                "strategy": "compact",
+                "detection": "stale_context",
+                "intervention": format!("Compact: reduce context from {:.0}% to target 60%", last_pressure * 100.0),
+            }));
+        }
+    }
+
+    // ── TOOL ERRORS: check error rate ──
+    let total: u64 = s.tool_counts.values().sum();
+    let errors: u64 = s.tool_errors.values().sum();
+    if total > 0 && errors > 0 {
+        let error_rate = errors as f64 / total as f64;
+        if error_rate > 0.2 {
+            detections.push(json!({
+                "category": "accuracy_risk",
+                "severity": "Error",
+                "confidence": error_rate,
+                "description": format!("High tool error rate: {}/{} calls failed ({:.0}%). Review tool definitions and permissions.", errors, total, error_rate * 100.0),
+            }));
+        }
+    }
+
+    // ── COST ANOMALY: check if token usage per event is spiking ──
+    if s.event_count > 5 {
+        let avg_tokens_per_event = (s.total_input_tokens + s.total_output_tokens) as f64 / s.event_count as f64;
+        if avg_tokens_per_event > 5000.0 {
+            detections.push(json!({
+                "category": "cost_anomaly",
+                "severity": "Warning",
+                "confidence": 0.7,
+                "description": format!("High token usage: {:.0} tokens/event average. Consider optimizing prompts or enabling caching.", avg_tokens_per_event),
+            }));
+        }
+    }
+
+    // ── RUN STRATEGIES on direct detections ──
+    for det in &detections {
+        let cat = det["category"].as_str().unwrap_or("");
+        for strategy in registry.strategies() {
+            // Simple strategy matching based on category
+            let matches = match (cat, strategy.name()) {
+                ("loop", "nudge") => true,
+                ("stale_context", "compact") => true,
+                ("accuracy_risk", "nudge") => true,
+                ("cost_anomaly", "nudge") => true,
+                ("cost_anomaly", "compact") => true,
+                _ => false,
+            };
+            if matches {
+                interventions.push(json!({
+                    "strategy": strategy.name(),
+                    "action": format!("{:?} triggered for {}", strategy.name(), cat),
+                }));
+                break;
+            }
+        }
+    }
+
+    (detections, strategies, interventions)
 }
 
 /// Compute health dimensions from accumulated observations.
