@@ -1105,7 +1105,15 @@ fn detect_from_events(
     let mut strategies = Vec::new();
     let mut interventions = Vec::new();
 
-    // ── LOOP DETECTION: same tool called 3+ times consecutively ──
+    // Dedup helper: skip if same category+description already exists in session
+    let is_dup = |cat: &str, desc: &str| -> bool {
+        s.detections.iter().any(|d| {
+            d.get("category").and_then(|c| c.as_str()) == Some(cat)
+                && d.get("description").and_then(|c| c.as_str()) == Some(desc)
+        })
+    };
+
+    // ── LOOP DETECTION: same tool 3+ times consecutively ──
     let mut last_tool = String::new();
     let mut repeat_count = 0u32;
     for ev in &s.events {
@@ -1117,17 +1125,13 @@ fn detect_from_events(
         if !tool.is_empty() && tool == last_tool {
             repeat_count += 1;
         } else {
-            if repeat_count >= 3 {
+            if repeat_count >= 3 && !is_dup("loop", &format!("loop-{}-{}", last_tool, repeat_count))
+            {
                 detections.push(json!({
                     "category": "loop",
                     "severity": "Warning",
                     "confidence": 0.85,
-                    "description": format!("Loop detected: '{}' called {} times consecutively — agent may be stuck", last_tool, repeat_count + 1),
-                }));
-                strategies.push(json!({
-                    "strategy": "nudge",
-                    "detection": "loop",
-                    "intervention": format!("Nudge: suggest trying a different approach instead of repeating {}", last_tool),
+                    "description": format!("Loop: '{}' called {} times consecutively (events #{}-#{}) — agent stuck retrying same tool. Try a different approach.", last_tool, repeat_count + 1, s.event_count - repeat_count as u64, s.event_count),
                 }));
             }
             last_tool = tool;
@@ -1184,22 +1188,54 @@ fn detect_from_events(
     // ── RUN STRATEGIES on direct detections ──
     for det in &detections {
         let cat = det["category"].as_str().unwrap_or("");
+        let desc = det["description"].as_str().unwrap_or("");
         for strategy in registry.strategies() {
-            // Simple strategy matching based on category
             let matches = match (cat, strategy.name()) {
                 ("loop", "nudge") => true,
                 ("stale_context", "compact") => true,
                 ("accuracy_risk", "nudge") => true,
                 ("cost_anomaly", "nudge") => true,
-                ("cost_anomaly", "compact") => true,
                 _ => false,
             };
             if matches {
                 interventions.push(json!({
                     "strategy": strategy.name(),
-                    "action": format!("{:?} triggered for {}", strategy.name(), cat),
+                    "action": desc,
                 }));
                 break;
+            }
+        }
+    }
+
+    // ── SECRET LEAK: scan tool content for secrets ──
+    let secret_patterns = [
+        ("sk-", "OpenAI API key"),
+        ("api_key", "API key"),
+        ("Bearer", "Bearer token"),
+        ("password", "Password in output"),
+        ("-----BEGIN", "Private key"),
+        ("ghp_", "GitHub PAT"),
+        ("xox[baprs]-", "Slack token"),
+        ("AKIA", "AWS access key"),
+    ];
+    for ev in s.events.iter().rev().take(20) {
+        if let Ok(v) = serde_json::to_value(ev) {
+            if let Some(content) = v
+                .get("result")
+                .and_then(|r| r.get("content"))
+                .and_then(|c| c.as_str())
+            {
+                for (pattern, name) in &secret_patterns {
+                    if content.to_lowercase().contains(pattern) && !is_dup("secret_leak", pattern) {
+                        detections.push(json!({
+                            "category": "secret_leak",
+                            "severity": "Critical",
+                            "confidence": 0.95,
+                            "description": format!("Potential {} detected in tool output. Immediate action required: rotate the exposed credential and remove it from output.", name),
+                        }));
+                        break;
+                    }
+                }
             }
         }
     }
