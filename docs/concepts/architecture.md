@@ -50,12 +50,14 @@ Every agent event is flattened via `event_to_observation()` into a JSON object c
 
 ## Layer 3: Strategize (14 strategies)
 
-When a detection fires, **all 14 strategies** are evaluated against it. The one with the **highest priority** wins — not first-match, best-match. This ensures specific strategies like `compact` (priority 80) or `circuit_break` (priority 100) aren't blocked by generic ones like `nudge` (priority 50).
+When a detection fires, **all 14 strategies** are evaluated against it. The one with the **highest priority** wins — not first-match, best-match. This ensures critical strategies like `circuit_break` (priority 100) aren't blocked by lighter ones like `nudge` (priority 10).
 
 | Strategy | Action | Priority |
 |---|---|---|
-| Nudge | Inject hint into agent context | 50 |
-| Compact | Trigger context compression | 80 |
+| Nudge | Inject hint into agent context | 10 |
+| Degrade | Switch to cheaper model | 15 |
+| Fork | Split into parallel children | 18 |
+| Compact | Trigger context compression | 20 |
 | Diversify | Force agents to use different approaches | 20 |
 | Reroute | Change agent's next action (graph) | 22 |
 | Escalate | Upgrade model, expand budget | 25 |
@@ -65,8 +67,6 @@ When a detection fires, **all 14 strategies** are evaluated against it. The one 
 | Quarantine | Route output to sandbox | 40 |
 | Replace | Kill agent, spawn replacement | 45 |
 | Isolate | Remove dangerous tools | 50 |
-| Degrade | Switch to cheaper model | 15 |
-| Fork | Split into parallel children | 18 |
 | CircuitBreak | Emergency stop ALL agents | 100 |
 
 ## Layer 4: Self-Improve (Meta-Harness)

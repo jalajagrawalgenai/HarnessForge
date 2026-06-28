@@ -11,7 +11,7 @@
 
 ## What Is Forge?
 
-Forge wraps around ANY existing AI agent and provides a complete **4-layer observability pipeline**:
+Forge wraps around your AI agent and provides a **4-layer observability pipeline**:
 
 | Layer | What It Does | Status |
 |---|---|---|
@@ -27,7 +27,7 @@ OBSERVE → DETECT → STRATEGIZE → SELF-IMPROVE
    12         16         14             1
 observers  detectors  strategies   meta-harness
 
-What other tools miss — Forge catches:
+What Forge catches:
 • Agent re-reads same file 4× → StaleContext → Compact context 87%→58%
 • Code generated but no tests → AccuracyRisk → Nudge: "Run tests first"
 • API key about to leak → SecretLeak → CircuitBreak immediately
@@ -36,141 +36,52 @@ What other tools miss — Forge catches:
 
 ---
 
-## 🚀 The UI-Driven Way (Recommended)
+## 🚀 Quick Start — `pip install` + `forge serve`
 
-**Install once. Everything through the dashboard. No terminal commands needed.**
+**One install. Start the dashboard. Everything through the UI.**
 
 ```bash
-pip install forge-agent-sdk    # Install
-forge serve                     # Start the dashboard
-# Opens http://localhost:3000 → type task, click Run, watch live
+pip install forge-agent-sdk    # Install (builds from source or install wheel)
+forge serve                     # Start the dashboard at http://localhost:3000
 ```
 
-The dashboard gives you all 15 features through a web UI:
+The dashboard is the primary Forge interface. It provides:
 
-```
-┌────────────────────────────────────────────────────────────┐
-│  Forge Dashboard                                            │
-│                                                             │
-│  [Run] [Sessions] [Live] [Audit] [Compliance] [Skills]     │
-│  [MCP] [Export] [Marketplace] [Cloud] [Analytics] [Meta]   │
-│  [Auth] [Admin] [Settings]                                  │
-│                                                             │
-│  ┌─ Run Agent ──────────────────────────────────────────┐  │
-│  │  Task: [Build a REST API with JWT auth and Swagger]   │  │
-│  │  Agent: [Claude Code ▼]   Preset: [Claude Code ▼]     │  │
-│  │  Detectors: ☑ All 16    Strategies: ☑ All 14          │  │
-│  │  [▶ Run with Harness]  [👁 Dry Run]                   │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌─ Live ───────────────────────────────────────────────┐  │
-│  │  Agent: "Analyzing auth module..."                     │  │
-│  │  ⚠ HARNESS: Stale context. Compact 87%→58%.           │  │
-│  │  🔧 HARNESS: Accuracy risk. Nudge: "Run tests."       │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  Health: 🟢Token 🟢Latency 🟢Cost 🟡Context 🟢Security     │
-└────────────────────────────────────────────────────────────┘
-```
+- **Run** — type a task, select agent type and preset, click Run. Watch live.
+- **Sessions** — browse past sessions with tabbed analysis (Overview, Timeline, Tools & Prompts, Detections, Hooks & Context)
+- **Live** — WebSocket-connected real-time view of running sessions
+- **Audit** — browse immutable audit events, full-text search, export
+- **Settings** — toggle observers (12), detectors (16), strategies (14)
 
-- **15 pages** — Run, Sessions, Live, Audit, Compliance, Skills, MCP, Export, Marketplace, Cloud, Analytics, Meta, Auth, Admin, Settings
-- **50+ API endpoints** — every Forge feature exposed via REST + WebSocket + SSE
-- **Real-time streaming** — live events, health gauges, intervention log
-- **Zero config** — all 31 agent types, 16 detectors, 14 strategies available from the UI
+Additional API endpoints are available at `/api/v1/*` for health, compliance, skills, MCP, analytics, meta, and more.
 
 ---
 
-# Python — Quick Start
-
-### Step 1: Install
-
-```bash
-pip install forge-agent-sdk
-```
-
-Requirements: Python 3.10+ (including 3.14). Works on Windows, macOS, and Linux.
-
-### Step 2: Launch the Dashboard
-
-```bash
-forge serve
-# Opens http://localhost:3000 — Forge Dashboard
-```
-
-### Step 3: Type a task, select your agent, click Run
-
-The dashboard handles everything: harness config, live monitoring, audit reports, compliance checks, MCP management, plugin marketplace, cloud deployment, and analytics.
-
-Or use Python programmatically:
-
-### Step 2 (alt): Run Your First Harnessed Agent
+## Python API
 
 ```python
-from forge_sdk import quick_run, list_presets, list_detectors
+from forge_sdk import create_harness, quick_run, list_presets, list_detectors
 
 # See what's available
-print("Presets:", list_presets())
-print("Detectors:", list_detectors())
+print("Presets:", list_presets())      # 31 presets
+print("Detectors:", list_detectors())  # 16 detectors
 
-# One-line run — harness watches a mock agent through 4 turns
+# One-line run — harness watches a mock agent
 result = quick_run("Write a function to validate email addresses")
-print(f"Success:       {result.success}")
-print(f"Observations:  {result.observation_count}")
-print(f"Detections:    {result.detection_count}")
+print(f"Success: {result.success}")
+print(f"Observations: {result.observation_count}")
+print(f"Detections: {result.detection_count}")
 print(f"Interventions: {result.intervention_count}")
-```
 
-### Step 3: Use a Real Harness (More Control)
-
-```python
-from forge_sdk import create_harness
-
-# Create a harness with the "solo" preset (full observer + detector + strategy suite)
+# Create a harness for more control
 harness = create_harness(preset="solo")
-
-# Run a task
 result = harness.run("Build a REST API for a todo app")
-print(result.to_dict())
 
-# Dry run — observe and detect, but don't intervene (safe for testing)
-result = harness.dry_run("Test run — observe only, no intervention")
-print(f"Would have intervened: {result.intervention_count} times")
-
-# Custom preset with more turns
-result = harness.run_with("Add JWT authentication", preset="claude-code", turns=8)
+# Dry run — observe and detect only (no intervention)
+result = harness.dry_run("Test run — observe only")
 ```
 
-### Step 4: Expected Output
-
-```
-Presets: ['solo', 'langgraph', 'crewai', 'autogen', 'langchain', 'openai-swarm',
-          'semantic-kernel', 'haystack', 'dspy', 'llamaindex', 'taskweaver',
-          'agno', 'atomic-agents', 'bee-agent', 'pydantic-ai', 'claude-code',
-          'aider', 'cline', 'continue', 'vercel-ai', 'copilot', 'cursor',
-          'windsurf', 'devin', 'amazon-q', 'replit-agent', 'pearai',
-          'bolt-new', 'lovable', 'v0', 'custom']  # 31 total
-Detectors: ['loop', 'stale_context', 'cost_anomaly', 'deadlock', 'hallucination',
-            'prompt_injection', 'secret_leak', 'variety_collapse', 'conversation_stall',
-            'goal_drift', 'model_mismatch', 'accuracy_risk', 'runaway_cost',
-            'resource_exhaustion', 'output_degradation', 'compliance_gap']  # 16 total
-
-Success:       True
-Observations:  9
-Detections:    0
-Interventions: 0
-```
-
-When the harness DOES detect an issue (e.g., agent re-reads the same file 4 times):
-
-```
-⚠  HARNESS [T6]: StaleContext detected. Context pressure 87%.
-   → Strategy: Compact. Context reduced 87% → 58%. Saved 4.2K tokens.
-
-🔧 HARNESS [T9]: AccuracyRisk detected. Code generated but no tests run.
-   → Strategy: Nudge. "Run the tests before proceeding."
-```
-
-### All Python API Functions
+### Python API Reference
 
 | Function | Description |
 |---|---|
@@ -210,57 +121,47 @@ python -c "from forge_sdk import get_version; print(get_version())"
 
 ---
 
-# Rust — Quick Start
-
-### Step 1: Clone and Build
+## Rust — Build from Source
 
 ```bash
 # Prerequisites: Rust 1.85+
-rustc --version
-
 git clone https://github.com/jalajagrawalgenai/HarnessForge.git
 cd HarnessForge
 cargo build --release
 ```
 
-### Step 2: Run the Built-in Example
+### Run the Example
 
 ```bash
 cargo run -p forge-example-basic-agent
 ```
 
-### Step 3: Expected Output
+### Use the Rust CLI
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║           Forge Harness — Basic Agent Example                ║
-╚══════════════════════════════════════════════════════════════╝
+```bash
+# Start the dashboard server
+cargo run -p forge-cli -- serve
 
-🚀 Running agent with Solo preset...
-   Task:  Write a function to validate email addresses
-   Agent: example-agent
+# Run an agent through the harness
+cargo run -p forge-cli -- run "Write a function to validate email addresses"
 
-╔══════════════════════════════════════════════════════════════╗
-║                    SESSION RESULTS                            ║
-╠══════════════════════════════════════════════════════════════╣
-║ Agent ID:       example-agent                                ║
-║ Success:        ✅ YES                                        ║
-║ Observation cycles: 9                                        ║
-║ Detections:     0                                            ║
-║ Interventions:  0                                            ║
-╚══════════════════════════════════════════════════════════════╝
+# Run with a specific preset
+cargo run -p forge-cli -- run --preset claude-code "Code review this PR"
 
-✅ No issues detected — agent ran cleanly.
+# Dry run — observe only, no intervention
+cargo run -p forge-cli -- run --dry-run "Test the harness config"
 
-── Try it yourself ──────────────────────────────────────────
-  forge init --name my-agent --agent-type solo
-  cd my-agent && cargo run
-  forge run "Your task here"
+# Scaffold a new Forge project
+cargo run -p forge-cli -- init --name my-agent
+
+# Check system dependencies
+cargo run -p forge-cli -- doctor
+
+# Get an audit report
+cargo run -p forge-cli -- explain <session-id>
 ```
 
-### Step 4: Use the SDK in Your Own Rust Project
-
-Add Forge to your `Cargo.toml`:
+### Use the SDK in Your Own Rust Project
 
 ```toml
 [dependencies]
@@ -270,8 +171,6 @@ tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 ```
 
-Then in `src/main.rs`:
-
 ```rust
 use forge_harness::runner;
 use forge_sdk::agent::{AgentType, MockAgent};
@@ -279,62 +178,29 @@ use forge_sdk::presets::Preset;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create a mock agent (in production, implement AgentAdapter for your real agent)
     let mut agent = MockAgent::new("my-agent", AgentType::Solo)
         .with_turns(4)
         .with_success(true);
 
-    // Run through the Forge harness
     let result = runner::run_harness_session(
         &mut agent,
         "Write a function to validate email addresses",
         Preset::Solo,
-        None, // No audit store (use Some(store) for persistence)
+        None,
     ).await?;
 
-    // See what happened
     println!("Agent:         {}", result.agent_id);
     println!("Success:       {}", result.success);
     println!("Observations:  {}", result.observation_count);
     println!("Detections:    {}", result.detection_count);
     println!("Interventions: {}", result.intervention_count);
-
     Ok(())
 }
 ```
 
-### Step 5: Run It
+### Wrapping a Real Agent (AgentAdapter Trait)
 
-```bash
-cargo run
-```
-
-### Step 6: Use the CLI
-
-```bash
-# Scaffold a new Forge project
-cargo run -p forge-cli -- init --name my-agent --agent-type solo
-cd my-agent && cargo run
-
-# Run a task through the harness
-cargo run -p forge-cli -- run "Refactor the auth module to use JWT"
-
-# Run with a specific preset
-cargo run -p forge-cli -- run --preset claude-code "Code review this PR"
-
-# Dry run — observe only, no intervention
-cargo run -p forge-cli -- run --dry-run "Test the harness config"
-
-# Check your system setup
-cargo run -p forge-cli -- doctor
-
-# Get an audit report for a session
-cargo run -p forge-cli -- explain <session-id>
-```
-
-### Wrapping a Real Agent (Rust — AgentAdapter Trait)
-
-Implement the `AgentAdapter` trait to wrap any existing agent (Claude API, LangGraph, CrewAI, etc.):
+Implement `AgentAdapter` to wrap any agent (Claude API, LangGraph, CrewAI, etc.):
 
 ```rust
 use forge_sdk::agent::{AgentAdapter, AgentType};
@@ -355,21 +221,16 @@ impl AgentAdapter for MyAgent {
         event_tx: mpsc::Sender<AgentEvent>,
         mut intervention_rx: mpsc::Receiver<Intervention>,
     ) -> Result<AgentOutcome, ForgeError> {
-        // 1. Signal: agent is starting
+        // Signal start
         event_tx.send(AgentEvent::Started {
             agent_id: self.id(), task: task.to_string(),
             timestamp: chrono::Utc::now(),
         }).await.ok();
 
-        // 2. Signal: agent is thinking
-        event_tx.send(AgentEvent::ThinkingStart {
-            agent_id: self.id(), timestamp: chrono::Utc::now(),
-        }).await.ok();
-
-        // 3. Call your LLM or agent logic here...
+        // Call your LLM
         let response = your_llm_call(task).await;
 
-        // 4. Report tool usage
+        // Report tool usage
         event_tx.send(AgentEvent::ToolCallEnd {
             agent_id: self.id(), tool: "llm_call".into(),
             result: ToolResult {
@@ -379,7 +240,7 @@ impl AgentAdapter for MyAgent {
             timestamp: chrono::Utc::now(),
         }).await.ok();
 
-        // 5. Check for harness interventions
+        // Check for harness interventions
         while let Ok(intervention) = intervention_rx.try_recv() {
             match intervention {
                 Intervention::CircuitBreak { reason } => {
@@ -395,10 +256,10 @@ impl AgentAdapter for MyAgent {
             }
         }
 
-        // 6. Signal completion
+        // Signal completion
         event_tx.send(AgentEvent::Completed {
             agent_id: self.id(),
-            summary: "Task completed successfully".into(),
+            summary: "Task completed".into(),
             timestamp: chrono::Utc::now(),
         }).await.ok();
 
@@ -411,39 +272,20 @@ impl AgentAdapter for MyAgent {
 }
 ```
 
-Then run it:
-
-```rust
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let mut agent = MyAgent { name: "claude".into(), model: "claude-sonnet-4-6".into() };
-
-    let result = runner::run_harness_session(
-        &mut agent,
-        "Write a function to validate email addresses",
-        Preset::Solo,
-        None,
-    ).await?;
-
-    println!("Observations:  {}", result.observation_count);
-    println!("Detections:    {}", result.detection_count);
-    println!("Interventions: {}", result.intervention_count);
-    Ok(())
-}
-```
-
 ---
 
-## Supported Agent Types (31 Presets)
+## Supported Agent Types
+
+Forge has 31 presets. Each preset configures which observers, detectors, and strategies are active for that agent type:
 
 | Preset | Agent Type | Preset | Agent Type |
 |---|---|---|---|
-| `solo` | Single LLM agent (Claude API, ChatGPT) | `langgraph` | LangGraph agent |
+| `solo` | Single LLM agent | `langgraph` | LangGraph agent |
 | `crewai` | CrewAI multi-agent | `autogen` | AutoGen multi-agent |
 | `langchain` | LangChain agent | `openai-swarm` | OpenAI Swarm |
-| `semantic-kernel` | Microsoft Semantic Kernel | `haystack` | Haystack by deepset |
+| `semantic-kernel` | Semantic Kernel | `haystack` | Haystack by deepset |
 | `dspy` | DSPy optimizer | `llamaindex` | LlamaIndex agent |
-| `taskweaver` | Microsoft TaskWeaver | `agno` | Agno framework |
+| `taskweaver` | TaskWeaver | `agno` | Agno framework |
 | `atomic-agents` | Atomic Agents | `bee-agent` | Bee Agent Framework |
 | `pydantic-ai` | PydanticAI | `claude-code` | Claude Code CLI |
 | `aider` | Aider CLI | `cline` | Cline (VS Code) |
@@ -455,18 +297,16 @@ async fn main() -> anyhow::Result<()> {
 | `lovable` | Lovable | `v0` | v0 by Vercel |
 | `custom` | Custom agent | | |
 
-Use them all the same way:
+Use them the same way:
 
 ```rust
 // Rust
 runner::run_harness_session(&mut agent, task, Preset::ClaudeCode, None).await?;
-runner::run_harness_session(&mut agent, task, Preset::LangGraph, None).await?;
 ```
 
 ```python
 # Python
 harness = create_harness(preset="claude-code")
-harness = create_harness(preset="langgraph")
 result = quick_run("task", preset="crewai")
 ```
 
@@ -566,6 +406,8 @@ result = quick_run("task", preset="crewai")
 | Strategy | Action | Priority |
 |---|---|---|
 | Nudge | Inject hint into agent context | 10 |
+| Degrade | Switch to cheaper model | 15 |
+| Fork | Split into parallel children | 18 |
 | Compact | Trigger context compression | 20 |
 | Diversify | Force agents to use different approaches | 20 |
 | Reroute | Change agent's next action (graph) | 22 |
@@ -576,8 +418,6 @@ result = quick_run("task", preset="crewai")
 | Quarantine | Route output to sandbox | 40 |
 | Replace | Kill agent, spawn replacement | 45 |
 | Isolate | Remove dangerous tools | 50 |
-| Degrade | Switch to cheaper model | 15 |
-| Fork | Split into parallel children | 18 |
 | CircuitBreak | Emergency stop ALL agents | 100 |
 
 ---
@@ -586,22 +426,69 @@ result = quick_run("task", preset="crewai")
 
 | Package | Files | Description |
 |---|---|---|
-| `forge-sdk` | 19 files | Public API — types, events, AgentAdapter, HarnessBuilder, 31 presets |
-| `forge-harness` | 10 files | Pipeline engine — event bus, plugin registry, runtime, checkpoint, human gate, factory |
-| `forge-observers` | 14 files | 12-dimensional watchers + health scorer |
-| `forge-detectors` | 17 files | 16 detectors with category-level deduplication |
-| `forge-strategies` | 15 files | 14 intervention strategies with priority-based selection |
-| `forge-audit` | 16 files | Immutable audit trail, SQLite/Postgres stores, FTS, hash-chain, replay, export |
-| `forge-meta` | 12 files | Self-improving meta-harness — weakness miner, proposer, validator, A/B testing |
-| `forge-cli` | 1 main + commands | CLI — `forge init`, `forge run`, `forge doctor`, `forge explain`, etc. |
-| `forge-server` | 17 route modules | Axum REST + SSE + WebSocket server — full pipeline per ingest, tabbed analysis |
-| `forge-bridge` | 4 files | HTTP client, token counter, model catalog, cost calculator |
-| `forge-mcp` | 4 files | MCP client, server, gateway, discovery |
-| `forge-skills` | 3 files | Skill registry, composer, built-in skills |
-| `forge-py` | 3 files | Python bindings (PyO3) — `pip install forge-agent-sdk` |
-| `forge-adapters` | 6 files | Real AgentAdapter impls for ALL 31 agent types (CLI, HTTP, Python, Bridge) + AdapterFactory |
-| `forge-cloud` | 5 files | AWS, Azure, GCP cloud integration traits + deploy |
-| **Total** | **188 source files** | **169 tests, 0 failures** |
+| `forge-sdk` | 19 | Public API — types, events, AgentAdapter, HarnessBuilder, 31 presets |
+| `forge-harness` | 10 | Pipeline engine — event bus, plugin registry, runtime, checkpoint, human gate |
+| `forge-observers` | 14 | 12-dimensional watchers + health scorer |
+| `forge-detectors` | 17 | 16 detectors with category-level deduplication |
+| `forge-strategies` | 15 | 14 intervention strategies with priority-based selection |
+| `forge-audit` | 16 | Immutable audit trail, SQLite/Postgres stores, FTS, hash-chain, replay, export |
+| `forge-meta` | 12 | Self-improving meta-harness — weakness miner, proposer, validator, A/B testing |
+| `forge-cli` | 8 | CLI — `forge init`, `forge run`, `forge serve`, `forge doctor`, etc. |
+| `forge-server` | 17 routes | Axum REST + SSE + WebSocket server — full pipeline per ingest, tabbed analysis |
+| `forge-bridge` | 4 | HTTP client, token counter, model catalog, cost calculator |
+| `forge-mcp` | 4 | MCP client, server, gateway, discovery |
+| `forge-skills` | 3 | Skill registry, composer, built-in skills |
+| `forge-py` | 3 | Python bindings (PyO3) — `pip install forge-agent-sdk` |
+| `forge-adapters` | 6 | AgentAdapter implementations for CLI, HTTP, Python, Bridge agents + AdapterFactory |
+| `forge-cloud` | 6 | AWS, Azure, GCP cloud integration traits + deploy |
+| `forge-auth` | 1 | SSO/OIDC authentication traits (Okta, Azure AD, Google Workspace) |
+| `forge-compliance` | 1 | Compliance report generation (EU AI Act, SOC 2, GDPR, HIPAA, PCI DSS) |
+| `forge-export` | 1 | Export targets (LangFuse, OpenTelemetry, PagerDuty, Slack, etc.) |
+| `forge-marketplace` | 1 | Plugin marketplace client (browse, install, publish) |
+| `forge-vscode` | 6 | VS Code extension — sidebar, TreeViews, 6 commands |
+| `forge-dashboard` | 1 | Dashboard crate |
+| `forge-integrations` | 1 | Integration adapters |
+| **Total** | **~188 source files** | **169 tests, 0 failures** |
+
+---
+
+## Project Status
+
+### ✅ Core Pipeline (Implemented)
+- [x] 4-layer pipeline: Observe → Detect → Strategize → Self-Improve
+- [x] 12 observers, 16 detectors, 14 strategies (all with real logic)
+- [x] `event_to_observation()` — bridges observer↔detector field mismatch
+- [x] Priority-based strategy selection (try all, pick highest-priority match)
+- [x] Category-level detector deduplication + per-tool loop dedup
+- [x] forge-server: 17 route modules, REST + SSE + WebSocket API
+- [x] Tabbed session analysis: Overview, Timeline, Tools & Prompts, Detections, Hooks & Context
+- [x] Token + cost estimation with estimated/real labeling
+- [x] Model auto-detection from hooks + environment variables
+- [x] Session persistence to `~/.forge/sessions/*.json` (survives restarts)
+- [x] AgentAdapter trait + MockAgent + HarnessBuilder + HarnessRuntime
+- [x] 31 presets (configuration templates for different agent types)
+- [x] Audit trail (immutable append-only, hash chain, signing)
+- [x] SQLite, In-memory, and Postgres audit stores
+- [x] Human gate (pause/approve/reject/override state machine)
+- [x] Checkpoint manager (save/load/evict)
+- [x] Meta-harness: weakness miner, proposer, validator, A/B testing
+- [x] Python bindings — `pip install forge-agent-sdk`
+- [x] Hook auto-registration for Claude Code (`~/.claude/settings.json`)
+- [x] CI/CD: `cargo test`, `cargo fmt`, `cargo clippy` all passing
+
+### 🚧 In Progress
+- [ ] Dashboard UI pages beyond Run, Sessions, Live, Audit, Settings (remaining routes have API but thin UI)
+- [ ] TypeScript bindings (NAPI-RS)
+- [ ] CLI TUI (`forge watch` with ratatui)
+- [ ] Plugin marketplace registry server (client crate exists)
+- [ ] Real-agent AdapterFactory wiring for all 31 presets (traits + stubs exist)
+
+### 📋 Planned
+- [ ] Docker Compose quickstart
+- [ ] GitHub Action for CI (`forgelabs/forge-action`)
+- [ ] Performance profiler (`forge profile`)
+- [ ] Interactive debugger (`forge debug`)
+- [ ] Carbon footprint tracking
 
 ---
 
@@ -622,9 +509,7 @@ cargo test -p forge-audit
 
 ## Using Forge with Claude Code
 
-### How It Works
-
-Forge wraps around Claude Code (or any AI agent) and watches every move:
+Forge auto-registers hooks in `~/.claude/settings.json` on first import. Every Claude Code session is then observed automatically:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -639,112 +524,21 @@ Forge wraps around Claude Code (or any AI agent) and watches every move:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Quick Test (Python)
+### Quick Test
 
 ```bash
-# Install
 pip install forge-agent-sdk
-
-# Run Claude Code through the Forge harness
-python -c "
-from forge_sdk import create_harness
-
-# Create a harness tuned for Claude Code
-harness = create_harness(preset='claude-code')
-
-# Run your task — Forge watches every turn
-result = harness.run('Write a Python script to analyze log files')
-
-print(f'Success: {result.success}')
-print(f'Observations: {result.observation_count}')
-print(f'Detections: {result.detection_count}')  
-print(f'Interventions: {result.intervention_count}')
-"
-```
-
-### Full Integration (Rust)
-
-```bash
-# Clone and build
-git clone https://github.com/jalajagrawalgenai/HarnessForge.git
-cd HarnessForge
-cargo build --release
-
-# Run with Claude Code preset
-cargo run -p forge-cli -- run --preset claude-code "Refactor the auth module"
-
-# Or wrap your own Claude-powered agent
-cargo run -p forge-example-basic-agent
+forge serve
+# Open http://localhost:3000 → any Claude Code session appears automatically
 ```
 
 ### What Forge Catches
 
-When Claude Code runs through Forge, it catches things like:
 - **Re-reading the same file** → StaleContext detection → auto-compacts context
 - **Getting stuck in a loop** → Loop detection → nudges to break the cycle
 - **Skipping tests** → AccuracyRisk detection → nudges to run tests
 - **Context filling up** → Context pressure detection → compresses before overflow
 - **Accidental secret leak** → Secret leak detection → circuit breaks immediately
-
----
-
-## Project Status
-
-### ✅ Implemented
-- [x] Full Event type system: AgentEvent (20 variants), Intervention (17 variants), AgentOutcome
-- [x] AgentAdapter trait + MockAgent
-- [x] HarnessBuilder + PluginRegistry + HarnessRuntime
-- [x] 12 observers, 16 detectors, 14 strategies (all with real logic)
-- [x] 4-layer pipeline: Observe → Detect → Strategize → Self-Improve
-- [x] event_to_observation() — bridges observer→detector field mismatch
-- [x] Priority-based strategy selection (try all, pick highest-priority match)
-- [x] Category-level detector deduplication + per-tool loop dedup
-- [x] forge-server: 17 route modules, full REST + SSE + WebSocket API
-- [x] Tabbed session analysis: Event Log, Hook Trace, Tools & Prompts, Detections, Context
-- [x] Token + cost estimation with clear estimated/real labeling
-- [x] Model auto-detection from hooks + environment variables
-- [x] Session persistence to ~/.forge/sessions/*.json (survives restarts)
-- [x] 31 presets (all wireable via factory)
-- [x] Audit trail (immutable append-only, hash chain, signing)
-- [x] SQLite, In-memory, and Postgres audit stores
-- [x] Human gate (pause/approve/reject/override state machine)
-- [x] Checkpoint manager (save/load/evict)
-- [x] CLI: `forge init`, `forge run`, `forge doctor`, `forge explain`
-- [x] Meta-harness: weakness miner, proposer, validator, A/B testing
-- [x] MCP client/server/gateway modules
-- [x] Skills registry + composer
-- [x] Cloud traits (AWS, Azure, GCP)
-- [x] Python bindings — `pip install forge-agent-sdk` (31 presets, Python 3.10–3.14)
-- [x] Real AgentAdapters for ALL 31 agent types (`packages/forge-adapters/`)
-- [x] AdapterFactory — auto-maps AgentType → CliAgent/HttpAgent/PythonAgent/BridgeAgent
-- [x] Dashboard with tabbed full-context analysis
-- [x] CI/CD workflow (`.github/workflows/publish-pypi.yml` — builds 15 wheels on tag push)
-- [x] SSO/SAML/OIDC auth (`forge-auth` — Okta, Azure AD, Google Workspace, RBAC)
-- [x] EU AI Act compliance packs (`forge-compliance` — Art.14/15, SOC 2, GDPR)
-- [x] LangFuse / W&B Weave / OpenTelemetry export (`forge-export`)
-- [x] PagerDuty / OpsGenie alerting (`forge-export::alerting`)
-- [x] Plugin marketplace client (`forge-marketplace` — browse, install, publish)
-- [x] VSCode extension (`forge-vscode` — sidebar, 6 commands, TreeViews)
-- [x] Kubernetes operator CRDs + Helm chart (`deploy/k8s/`)
-
-### 🚧 In Progress
-- [ ] TypeScript bindings (NAPI-RS)
-- [ ] CLI TUI (`forge watch` with ratatui)
-- [ ] Plugin marketplace registry server (client is done)
-
-### 📋 Future
-- [ ] Docker Compose quickstart
-- [ ] GitHub Action for CI (`forgelabs/forge-action`)
-- [ ] Performance profiler (`forge profile`)
-- [ ] Interactive debugger (`forge debug`)
-- [ ] Carbon footprint tracking
-
-### 📋 Future
-- [ ] Docker Compose quickstart
-- [ ] GitHub Action for CI (`forgelabs/forge-action`)
-- [ ] Performance profiler (`forge profile`)
-- [ ] Interactive debugger (`forge debug`)
-- [ ] Carbon footprint tracking
 
 ---
 
@@ -754,4 +548,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Built with Rust 🦀** | 188 source files | 169 tests | 0 failures | 4-layer pipeline (Observe → Detect → Strategize → Self-Improve)
+**Built with Rust 🦀** | ~188 source files | 169 tests | 0 failures | 4-layer pipeline (Observe → Detect → Strategize → Self-Improve)
