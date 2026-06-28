@@ -130,10 +130,7 @@ pub async fn resume(State(state): State<Arc<AppState>>, Path(id): Path<String>) 
 /// Returns a complete, human-readable analysis of the session including:
 /// token breakdown, tool usage, context health, loop detection, degradation,
 /// health scores with explanations, stop reason, and recommendations.
-pub async fn analysis(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Json<Value> {
+pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     let s = match sessions.get(&id) {
         Some(s) => s,
@@ -144,12 +141,15 @@ pub async fn analysis(
     let _cache_total = s.total_cache_read + s.total_cache_write;
     let cache_hit_pct = if s.total_input_tokens > 0 {
         (s.total_cache_read as f64 / s.total_input_tokens as f64) * 100.0
-    } else { 0.0 };
+    } else {
+        0.0
+    };
 
     // Cost estimate based on detected model
     let model = s.model_name.as_deref().unwrap_or("unknown");
     let (input_price, output_price, model_family) = model_pricing(model);
-    let est_cost = (s.total_input_tokens as f64 * input_price) + (s.total_output_tokens as f64 * output_price);
+    let est_cost =
+        (s.total_input_tokens as f64 * input_price) + (s.total_output_tokens as f64 * output_price);
     let cache_savings = s.total_cache_read as f64 * input_price * 0.9; // cache reads save 90% of input cost
     let effective_cost = est_cost - cache_savings;
 
@@ -175,8 +175,14 @@ pub async fn analysis(
     let context_peaks = s.context_pressure_history.len();
     let context_avg = if context_peaks > 0 {
         s.context_pressure_history.iter().sum::<f64>() / context_peaks as f64
-    } else { 0.0 };
-    let context_max = s.context_pressure_history.iter().cloned().fold(0.0f64, f64::max);
+    } else {
+        0.0
+    };
+    let context_max = s
+        .context_pressure_history
+        .iter()
+        .cloned()
+        .fold(0.0f64, f64::max);
     let compaction_events = s.context_pressure_history.len();
 
     // Health analysis with explanations
@@ -205,14 +211,16 @@ pub async fn analysis(
     };
 
     // Duration
-    let duration_secs = s.completed_at
+    let duration_secs = s
+        .completed_at
         .map(|t| (t - s.created_at).num_seconds())
         .unwrap_or_else(|| (Utc::now() - s.created_at).num_seconds());
 
     // Generate recommendations
     let mut recommendations: Vec<&str> = Vec::new();
     if cache_hit_pct < 20.0 && total_tokens > 1000 {
-        recommendations.push("Low cache hit rate — consider enabling prompt caching to reduce costs");
+        recommendations
+            .push("Low cache hit rate — consider enabling prompt caching to reduce costs");
     }
     if total_tool_errors > 0 && total_tool_errors as f64 / total_tool_calls.max(1) as f64 > 0.1 {
         recommendations.push("High tool error rate — review tool definitions and error handling");
@@ -221,7 +229,8 @@ pub async fn analysis(
         recommendations.push("Context pressure consistently high — compact more aggressively or reduce conversation length");
     }
     if s.subagent_count > 5 {
-        recommendations.push("High subagent spawn count — consider consolidating tasks to reduce overhead");
+        recommendations
+            .push("High subagent spawn count — consider consolidating tasks to reduce overhead");
     }
     if s.event_count > 100 && s.detections.is_empty() {
         recommendations.push("No issues detected across many events — your agent is running well");
@@ -321,21 +330,45 @@ use chrono::Utc;
 fn model_pricing(model: &str) -> (f64, f64, String) {
     let m = model.to_lowercase();
     // Claude models
-    if m.contains("opus") { return (0.000015, 0.000075, "Claude Opus".into()); }
-    if m.contains("sonnet") { return (0.000003, 0.000015, "Claude Sonnet".into()); }
-    if m.contains("haiku") { return (0.0000008, 0.000004, "Claude Haiku".into()); }
-    if m.contains("fable") { return (0.000003, 0.000015, "Claude Fable".into()); }
-    if m.contains("claude") { return (0.000003, 0.000015, "Claude (default)".into()); }
+    if m.contains("opus") {
+        return (0.000015, 0.000075, "Claude Opus".into());
+    }
+    if m.contains("sonnet") {
+        return (0.000003, 0.000015, "Claude Sonnet".into());
+    }
+    if m.contains("haiku") {
+        return (0.0000008, 0.000004, "Claude Haiku".into());
+    }
+    if m.contains("fable") {
+        return (0.000003, 0.000015, "Claude Fable".into());
+    }
+    if m.contains("claude") {
+        return (0.000003, 0.000015, "Claude (default)".into());
+    }
     // GPT models
-    if m.contains("gpt-4o") { return (0.0000025, 0.000010, "GPT-4o".into()); }
-    if m.contains("gpt-4") { return (0.000030, 0.000060, "GPT-4".into()); }
-    if m.contains("gpt-3.5") { return (0.0000005, 0.0000015, "GPT-3.5".into()); }
-    if m.contains("o1") || m.contains("o3") { return (0.000015, 0.000060, "OpenAI o-series".into()); }
-    if m.contains("gpt") { return (0.0000025, 0.000010, "GPT (default)".into()); }
+    if m.contains("gpt-4o") {
+        return (0.0000025, 0.000010, "GPT-4o".into());
+    }
+    if m.contains("gpt-4") {
+        return (0.000030, 0.000060, "GPT-4".into());
+    }
+    if m.contains("gpt-3.5") {
+        return (0.0000005, 0.0000015, "GPT-3.5".into());
+    }
+    if m.contains("o1") || m.contains("o3") {
+        return (0.000015, 0.000060, "OpenAI o-series".into());
+    }
+    if m.contains("gpt") {
+        return (0.0000025, 0.000010, "GPT (default)".into());
+    }
     // DeepSeek
-    if m.contains("deepseek") { return (0.00000027, 0.0000011, "DeepSeek".into()); }
+    if m.contains("deepseek") {
+        return (0.00000027, 0.0000011, "DeepSeek".into());
+    }
     // Gemini
-    if m.contains("gemini") { return (0.00000125, 0.000005, "Gemini".into()); }
+    if m.contains("gemini") {
+        return (0.00000125, 0.000005, "Gemini".into());
+    }
     // Default / unknown
     (0.000003, 0.000015, "unknown (using default)".into())
 }

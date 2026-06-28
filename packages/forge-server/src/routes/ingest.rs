@@ -226,9 +226,15 @@ pub async fn ingest_event(
                     }
 
                     // Trim to reasonable sizes
-                    if s.detections.len() > 100 { s.detections.remove(0); }
-                    if s.strategy_results.len() > 100 { s.strategy_results.remove(0); }
-                    if s.interventions.len() > 100 { s.interventions.remove(0); }
+                    if s.detections.len() > 100 {
+                        s.detections.remove(0);
+                    }
+                    if s.strategy_results.len() > 100 {
+                        s.strategy_results.remove(0);
+                    }
+                    if s.interventions.len() > 100 {
+                        s.interventions.remove(0);
+                    }
                 }
             }
         }
@@ -267,14 +273,18 @@ pub async fn ingest_event(
                     agent_id: agent_id.to_string(),
                     overall: hu["overall"].as_f64().unwrap_or(1.0),
                     dimensions: forge_sdk::types::health::HealthDimensions {
-                        token_efficiency: hu["dimensions"]["token_efficiency"].as_f64().unwrap_or(1.0),
+                        token_efficiency: hu["dimensions"]["token_efficiency"]
+                            .as_f64()
+                            .unwrap_or(1.0),
                         latency: hu["dimensions"]["latency"].as_f64().unwrap_or(1.0),
                         cost: hu["dimensions"]["cost"].as_f64().unwrap_or(1.0),
                         accuracy: hu["dimensions"]["accuracy"].as_f64().unwrap_or(1.0),
                         orchestration: hu["dimensions"]["orchestration"].as_f64().unwrap_or(1.0),
                         security: hu["dimensions"]["security"].as_f64().unwrap_or(1.0),
                         reliability: hu["dimensions"]["reliability"].as_f64().unwrap_or(1.0),
-                        context_quality: hu["dimensions"]["context_quality"].as_f64().unwrap_or(1.0),
+                        context_quality: hu["dimensions"]["context_quality"]
+                            .as_f64()
+                            .unwrap_or(1.0),
                         compliance: hu["dimensions"]["compliance"].as_f64().unwrap_or(1.0),
                         communication: None,
                         memory: None,
@@ -307,7 +317,8 @@ pub async fn ingest_event(
             if hook_name == "StopFailure" {
                 s.status = SessionStatus::Failed;
                 s.completed_at = Some(Utc::now());
-                s.stop_reason = payload.get("error")
+                s.stop_reason = payload
+                    .get("error")
                     .and_then(|v| v.as_str())
                     .map(|e| format!("Failed: {}", e));
             }
@@ -324,14 +335,21 @@ pub async fn ingest_event(
                 }
                 "PostToolUse" => {
                     let tool = if tool_name.is_empty() {
-                        payload.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown")
+                        payload
+                            .get("tool_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
                     } else {
                         tool_name
                     };
                     *s.tool_counts.entry(tool.to_string()).or_insert(0) += 1;
 
                     // Track errors
-                    if payload.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    if payload
+                        .get("is_error")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
                         *s.tool_errors.entry(tool.to_string()).or_insert(0) += 1;
                     }
 
@@ -352,7 +370,10 @@ pub async fn ingest_event(
                 }
                 "PostToolUseFailure" => {
                     let tool = if tool_name.is_empty() {
-                        payload.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown")
+                        payload
+                            .get("tool_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
                     } else {
                         tool_name
                     };
@@ -371,7 +392,15 @@ pub async fn ingest_event(
             }
 
             // Track tokens from transcript-style events
-            if let Some(AgentEvent::TokenUsage { input, output, cache_read, cache_write, model, .. }) = &agent_event {
+            if let Some(AgentEvent::TokenUsage {
+                input,
+                output,
+                cache_read,
+                cache_write,
+                model,
+                ..
+            }) = &agent_event
+            {
                 s.total_input_tokens += input;
                 s.total_output_tokens += output;
                 s.total_cache_read += cache_read;
@@ -579,7 +608,11 @@ fn compute_overall_health(dims: &forge_sdk::types::health::HealthDimensions) -> 
         total += getter(dims) * weight;
         weight_sum += weight;
     }
-    if weight_sum > 0.0 { total / weight_sum } else { 1.0 }
+    if weight_sum > 0.0 {
+        total / weight_sum
+    } else {
+        1.0
+    }
 }
 
 /// Compute health dimensions from accumulated observations.
