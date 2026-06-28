@@ -371,15 +371,13 @@ pub async fn ingest_event(
             }
 
             // Track tokens from transcript-style events
-            if let Some(ref event) = agent_event {
-                if let AgentEvent::TokenUsage { input, output, cache_read, cache_write, model, .. } = event {
-                    s.total_input_tokens += input;
-                    s.total_output_tokens += output;
-                    s.total_cache_read += cache_read;
-                    s.total_cache_write += cache_write;
-                    if s.model_name.is_none() && !model.is_empty() && model != "unknown" {
-                        s.model_name = Some(model.clone());
-                    }
+            if let Some(AgentEvent::TokenUsage { input, output, cache_read, cache_write, model, .. }) = &agent_event {
+                s.total_input_tokens += input;
+                s.total_output_tokens += output;
+                s.total_cache_read += cache_read;
+                s.total_cache_write += cache_write;
+                if s.model_name.is_none() && !model.is_empty() && model != "unknown" {
+                    s.model_name = Some(model.clone());
                 }
             }
         }
@@ -549,8 +547,10 @@ fn map_agent_class(ac: &str) -> String {
 }
 
 /// Compute a weighted overall health score from dimensions.
+type HealthDimFn = dyn Fn(&forge_sdk::types::health::HealthDimensions) -> f64;
+
 fn compute_overall_health(dims: &forge_sdk::types::health::HealthDimensions) -> f64 {
-    let weights: &[(&dyn Fn(&forge_sdk::types::health::HealthDimensions) -> f64, f64)] = &[
+    let weights: &[(&HealthDimFn, f64)] = &[
         (&|d| d.token_efficiency, 0.12),
         (&|d| d.latency, 0.08),
         (&|d| d.cost, 0.10),
