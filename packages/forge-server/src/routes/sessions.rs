@@ -23,7 +23,7 @@ pub async fn create() -> Json<Value> {
 }
 
 /// GET /v1/sessions
-/// Returns all sessions with their status and metadata.
+/// Returns all sessions with their status, metadata, and pipeline summary.
 pub async fn list(State(state): State<Arc<AppState>>) -> Json<Value> {
     let sessions = state.store.read().await;
     let mut items: Vec<Value> = sessions
@@ -39,6 +39,12 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Json<Value> {
                 "completed_at": s.completed_at.map(|t| t.to_rfc3339()),
                 "health_score": s.health_score,
                 "result": s.result,
+                "pipeline": {
+                    "event_count": s.event_count,
+                    "observation_count": s.observations.len(),
+                    "detection_count": s.detections.len(),
+                    "intervention_count": s.interventions.len(),
+                }
             })
         })
         .collect();
@@ -51,6 +57,7 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Json<Value> {
 }
 
 /// GET /v1/sessions/:id
+/// Returns full session detail including pipeline data.
 pub async fn get(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     match sessions.get(&id) {
@@ -65,6 +72,15 @@ pub async fn get(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> 
             "health_score": s.health_score,
             "result": s.result,
             "event_count": s.events.len(),
+            "pipeline": {
+                "observations": s.observations,
+                "detections": s.detections,
+                "strategy_results": s.strategy_results,
+                "interventions": s.interventions,
+                "total_observations": s.observations.len(),
+                "total_detections": s.detections.len(),
+                "total_interventions": s.interventions.len(),
+            }
         })),
         None => Json(json!({"error": "session not found", "id": id})),
     }

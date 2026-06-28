@@ -4,8 +4,8 @@
 //!
 //! Accepts events from any agentic framework (Claude Code hooks, LangGraph
 //! callbacks, CrewAI middleware, AutoGen observers, etc.). Auto-creates
-//! sessions on first contact. Feeds events into the harness pipeline.
-//! Returns pending interventions when applicable.
+//! sessions on first contact. Runs the full harness pipeline:
+//!   Observe → Detect → Strategize → Intervene
 //!
 //! POST /api/v1/ingest/transcript
 //!
@@ -21,27 +21,33 @@ use forge_sdk::events::AgentEvent;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+/// Build a PluginRegistry from a preset string.
+/// Maps the preset name to the corresponding Preset enum and builds the registry.
+fn build_registry_for_preset(preset_name: &str) -> forge_harness::plugin_registry::PluginRegistry {
+    let preset = match preset_name.to_lowercase().as_str() {
+        "solo" => forge_sdk::presets::Preset::Solo,
+        "claude-code" | "claude" | "claudecode" => forge_sdk::presets::Preset::ClaudeCode,
+        "langgraph" => forge_sdk::presets::Preset::LangGraph,
+        "crewai" | "crew" => forge_sdk::presets::Preset::CrewAI,
+        "autogen" => forge_sdk::presets::Preset::AutoGen,
+        "langchain" => forge_sdk::presets::Preset::LangChain,
+        "aider" => forge_sdk::presets::Preset::Aider,
+        "cline" => forge_sdk::presets::Preset::Cline,
+        "continue" => forge_sdk::presets::Preset::Continue,
+        "copilot" => forge_sdk::presets::Preset::Copilot,
+        "cursor" => forge_sdk::presets::Preset::Cursor,
+        "windsurf" => forge_sdk::presets::Preset::Windsurf,
+        "devin" => forge_sdk::presets::Preset::Devin,
+        _ => forge_sdk::presets::Preset::Solo,
+    };
+    forge_harness::factory::build_registry_from_preset(&preset)
+}
+
 /// POST /api/v1/ingest/event
 ///
 /// Universal event ingestion. Accepts events from any agentic system.
 /// Auto-creates sessions when a lifecycle-start event arrives.
-/// Feeds events into the harness pipeline for observation/detection/intervention.
-///
-/// Expected envelope:
-/// ```json
-/// {
-///   "agentClass": "claude-code | langgraph | crewai | autogen | ...",
-///   "sessionId": "...",
-///   "agentId": "...",
-///   "hookName": "SessionStart | UserPromptSubmit | PreToolUse | PostToolUse | ...",
-///   "toolName": "...",
-///   "payload": { ... },
-///   "cwd": "...",
-///   "timestamp": 1234567890,
-///   "_meta": { "agent": {...}, "session": {...}, "project": {...} },
-///   "flags": { "startsSession": true, "stopsSession": false, ... }
-/// }
-/// ```
+/// Runs the harness pipeline (observe → detect → strategize) on every event.
 pub async fn ingest_event(
     State(state): State<Arc<AppState>>,
     Json(body): Json<Value>,
@@ -77,54 +83,205 @@ pub async fn ingest_event(
         .unwrap_or(false);
 
     // ── Auto-create session on first contact ──
-    {
+    let is_new_session = {
         let sessions = state.store.read().await;
-        if !sessions.contains_key(session_id) {
-            drop(sessions);
-            let task = payload
-                .get("prompt")
-                .and_then(|v| v.as_str())
-                .unwrap_or("(live agent session)")
-                .to_string();
+        !sessions.contains_key(session_id)
+    };
 
-            // Map agent_class to our agent_type
-            let agent_type = map_agent_class(agent_class);
-            let preset = agent_type.clone(); // default preset matches agent type
+    if is_new_session {
+        let task = payload
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(live agent session)")
+            .to_string();
 
-            let session = SessionState::new(session_id.to_string(), task, agent_type, preset);
+        let agent_type = map_agent_class(agent_class);
+        let preset = agent_type.clone();
 
-            let mut sessions = state.store.write().await;
-            sessions.insert(session_id.to_string(), session);
-            tracing::info!(
-                session_id = %session_id,
-                agent_class = %agent_class,
-                "Auto-created session from ingest event"
-            );
-        }
+        let session = SessionState::new(session_id.to_string(), task, agent_type, preset);
+
+        let mut sessions = state.store.write().await;
+        sessions.insert(session_id.to_string(), session);
+        tracing::info!(
+            session_id = %session_id,
+            agent_class = %agent_class,
+            "Auto-created session from ingest event"
+        );
     }
 
-    // ── Convert hook event to AgentEvent and broadcast ──
+    // ── Convert hook event to AgentEvent ──
     let agent_event = hook_to_agent_event(hook_name, agent_id, tool_name, &payload, timestamp);
 
-    if let Some(event) = agent_event {
-        // Broadcast to WebSocket/SSE consumers
-        if let Some(broadcaster) = {
-            let sessions = state.store.read().await;
-            sessions
-                .get(session_id)
-                .map(|s| s.event_broadcaster.clone())
-        } {
-            let _ = broadcaster.send(event.clone());
+    // ── Build registry for this session's preset ──
+    let registry = {
+        let sessions = state.store.read().await;
+        sessions
+            .get(session_id)
+            .map(|s| build_registry_for_preset(&s.preset))
+            .unwrap_or_else(|| build_registry_for_preset("solo"))
+    };
+
+    // ── Run the harness pipeline ──
+    let mut new_observations: Vec<Value> = Vec::new();
+    let mut new_detections: Vec<Value> = Vec::new();
+    let mut new_strategies: Vec<Value> = Vec::new();
+    let mut new_interventions: Vec<Value> = Vec::new();
+    let mut health_update: Option<Value> = None;
+
+    if let Some(ref event) = agent_event {
+        // ── 1. OBSERVE: Run all observers against this event ──
+        for observer in registry.observers() {
+            if let Some(obs) = observer.observe(event).await {
+                new_observations.push(obs.clone());
+            }
         }
 
-        // Store in ring buffer
+        // ── 2. Store event and broadcast ──
         {
             let mut sessions = state.store.write().await;
             if let Some(s) = sessions.get_mut(session_id) {
+                // Broadcast to WebSocket/SSE consumers
+                let _ = s.event_broadcaster.send(event.clone());
+
+                // Store in ring buffer
                 s.events.push(event.clone());
                 if s.events.len() > 1000 {
                     s.events.remove(0);
                 }
+                s.event_count += 1;
+
+                // Accumulate observations
+                for obs in &new_observations {
+                    s.observations.push(obs.clone());
+                    // Keep last 200 observation results
+                    if s.observations.len() > 200 {
+                        s.observations.remove(0);
+                    }
+                }
+            }
+        }
+
+        // ── 3. DETECT: Run detectors every 3 events or on key events ──
+        let should_detect = {
+            let sessions = state.store.read().await;
+            sessions
+                .get(session_id)
+                .map(|s| {
+                    s.event_count % 3 == 0
+                        || hook_name == "PostToolUse"
+                        || hook_name == "PostToolUseFailure"
+                })
+                .unwrap_or(false)
+        };
+
+        if should_detect {
+            let observations_snapshot = {
+                let sessions = state.store.read().await;
+                sessions
+                    .get(session_id)
+                    .map(|s| s.observations.clone())
+                    .unwrap_or_default()
+            };
+
+            for detector in registry.detectors() {
+                let found = detector.detect(agent_id, &observations_snapshot).await;
+                for issue in &found {
+                    new_detections.push(serde_json::json!({
+                        "category": issue.category_name(),
+                        "severity": format!("{:?}", issue.severity),
+                        "confidence": issue.confidence,
+                        "description": issue.description,
+                    }));
+
+                    // ── 4. STRATEGIZE: Run strategies for each detection ──
+                    for strategy in registry.strategies() {
+                        if let Some(result) = strategy.evaluate(issue).await {
+                            new_strategies.push(serde_json::json!({
+                                "strategy": strategy.name(),
+                                "detection": issue.category_name(),
+                                "intervention": format!("{:?}", result.intervention),
+                            }));
+                            new_interventions.push(serde_json::json!({
+                                "strategy": strategy.name(),
+                                "action": format!("{:?}", result.intervention),
+                            }));
+                            break; // First matching strategy wins
+                        }
+                    }
+                }
+            }
+
+            // Store detections, strategies, and interventions (as JSON for API)
+            {
+                let mut sessions = state.store.write().await;
+                if let Some(s) = sessions.get_mut(session_id) {
+                    for d in &new_detections {
+                        s.detections.push(d.clone());
+                    }
+                    for strat in &new_strategies {
+                        s.strategy_results.push(strat.clone());
+                    }
+                    for iv_json in &new_interventions {
+                        s.interventions.push(iv_json.clone());
+                    }
+
+                    // Trim to reasonable sizes
+                    if s.detections.len() > 100 { s.detections.remove(0); }
+                    if s.strategy_results.len() > 100 { s.strategy_results.remove(0); }
+                    if s.interventions.len() > 100 { s.interventions.remove(0); }
+                }
+            }
+        }
+
+        // ── 5. HEALTH: Compute health score from observations ──
+        {
+            let sessions = state.store.read().await;
+            if let Some(s) = sessions.get(session_id) {
+                let dims = compute_health_dimensions(&s.observations);
+                let overall = compute_overall_health(&dims);
+                let trend = "stable"; // simplified — full trend tracking needs previous score
+
+                health_update = Some(serde_json::json!({
+                    "overall": overall,
+                    "trend": trend,
+                    "dimensions": {
+                        "token_efficiency": dims.token_efficiency,
+                        "latency": dims.latency,
+                        "cost": dims.cost,
+                        "accuracy": dims.accuracy,
+                        "orchestration": dims.orchestration,
+                        "security": dims.security,
+                        "reliability": dims.reliability,
+                        "context_quality": dims.context_quality,
+                        "compliance": dims.compliance,
+                    },
+                }));
+            }
+        }
+
+        // Store health score
+        if let Some(ref hu) = health_update {
+            let mut sessions = state.store.write().await;
+            if let Some(s) = sessions.get_mut(session_id) {
+                s.health_score = Some(forge_sdk::types::health::HealthScore {
+                    agent_id: agent_id.to_string(),
+                    overall: hu["overall"].as_f64().unwrap_or(1.0),
+                    dimensions: forge_sdk::types::health::HealthDimensions {
+                        token_efficiency: hu["dimensions"]["token_efficiency"].as_f64().unwrap_or(1.0),
+                        latency: hu["dimensions"]["latency"].as_f64().unwrap_or(1.0),
+                        cost: hu["dimensions"]["cost"].as_f64().unwrap_or(1.0),
+                        accuracy: hu["dimensions"]["accuracy"].as_f64().unwrap_or(1.0),
+                        orchestration: hu["dimensions"]["orchestration"].as_f64().unwrap_or(1.0),
+                        security: hu["dimensions"]["security"].as_f64().unwrap_or(1.0),
+                        reliability: hu["dimensions"]["reliability"].as_f64().unwrap_or(1.0),
+                        context_quality: hu["dimensions"]["context_quality"].as_f64().unwrap_or(1.0),
+                        compliance: hu["dimensions"]["compliance"].as_f64().unwrap_or(1.0),
+                        communication: None,
+                        memory: None,
+                        diversity: None,
+                    },
+                    trend: forge_sdk::types::health::HealthTrend::Stable,
+                });
             }
         }
     }
@@ -140,31 +297,27 @@ pub async fn ingest_event(
                 s.status = SessionStatus::Completed;
                 s.completed_at = Some(Utc::now());
             }
-            // Update task if payload has a prompt
             if let Some(prompt) = payload.get("prompt").and_then(|v| v.as_str()) {
                 if s.task == "(live agent session)" && !prompt.is_empty() {
                     s.task = prompt.to_string();
                 }
             }
-            // Track tool usage counts
-            if hook_name == "PostToolUse" && !tool_name.is_empty() {
-                // Increment observation count via detection counter
-                // (actual detection runs in pipeline cycle)
-            }
         }
     }
 
-    // ── Return response ──
-    // Check if there are pending interventions for this session
-    let interventions: Vec<Value> = vec![];
-    // TODO: query pipeline for pending interventions
-
+    // ── Build response ──
     Json(json!({
         "status": "ok",
         "sessionId": session_id,
         "hookName": hook_name,
         "ingested": true,
-        "interventions": interventions,
+        "pipeline": {
+            "observations": new_observations,
+            "detections": new_detections,
+            "strategies": new_strategies,
+            "interventions": new_interventions,
+            "health": health_update,
+        }
     }))
 }
 
@@ -187,7 +340,6 @@ pub async fn ingest_transcript(
     {
         let mut sessions = state.store.write().await;
         if let Some(s) = sessions.get_mut(session_id) {
-            // Record token usage event if we have data
             let input = body
                 .get("totalInputTokens")
                 .and_then(|v| v.as_u64())
@@ -242,7 +394,7 @@ pub async fn ingest_transcript(
 
 /// GET /api/v1/ingest/status
 ///
-/// Returns ingestion stats: active sessions, event counts, etc.
+/// Returns ingestion stats: active sessions, event counts, pipeline metrics.
 pub async fn ingest_status(State(state): State<Arc<AppState>>) -> Json<Value> {
     let sessions = state.store.read().await;
     let total = sessions.len();
@@ -251,6 +403,9 @@ pub async fn ingest_status(State(state): State<Arc<AppState>>) -> Json<Value> {
         .filter(|s| s.status == SessionStatus::Running)
         .count();
     let total_events: usize = sessions.values().map(|s| s.events.len()).sum();
+    let total_observations: usize = sessions.values().map(|s| s.observations.len()).sum();
+    let total_detections: usize = sessions.values().map(|s| s.detections.len()).sum();
+    let total_interventions: usize = sessions.values().map(|s| s.interventions.len()).sum();
     let auto_created = sessions
         .values()
         .filter(|s| s.task == "(live agent session)")
@@ -261,6 +416,9 @@ pub async fn ingest_status(State(state): State<Arc<AppState>>) -> Json<Value> {
         "activeSessions": running,
         "totalSessions": total,
         "totalEventsInRing": total_events,
+        "totalObservations": total_observations,
+        "totalDetections": total_detections,
+        "totalInterventions": total_interventions,
         "autoCreatedSessions": auto_created,
         "message": if running > 0 {
             format!("{} agent(s) being monitored", running)
@@ -310,10 +468,89 @@ fn map_agent_class(ac: &str) -> String {
     .to_string()
 }
 
+/// Compute a weighted overall health score from dimensions.
+fn compute_overall_health(dims: &forge_sdk::types::health::HealthDimensions) -> f64 {
+    let weights: &[(&dyn Fn(&forge_sdk::types::health::HealthDimensions) -> f64, f64)] = &[
+        (&|d| d.token_efficiency, 0.12),
+        (&|d| d.latency, 0.08),
+        (&|d| d.cost, 0.10),
+        (&|d| d.accuracy, 0.12),
+        (&|d| d.orchestration, 0.08),
+        (&|d| d.security, 0.12),
+        (&|d| d.reliability, 0.08),
+        (&|d| d.context_quality, 0.08),
+        (&|d| d.compliance, 0.08),
+    ];
+    let mut total = 0.0;
+    let mut weight_sum = 0.0;
+    for (getter, weight) in weights {
+        total += getter(dims) * weight;
+        weight_sum += weight;
+    }
+    if weight_sum > 0.0 { total / weight_sum } else { 1.0 }
+}
+
+/// Compute health dimensions from accumulated observations.
+fn compute_health_dimensions(observations: &[Value]) -> forge_sdk::types::health::HealthDimensions {
+    let mut dims = forge_sdk::types::health::HealthDimensions {
+        token_efficiency: 1.0,
+        latency: 1.0,
+        cost: 1.0,
+        accuracy: 1.0,
+        orchestration: 1.0,
+        security: 1.0,
+        reliability: 1.0,
+        context_quality: 1.0,
+        compliance: 1.0,
+        communication: None,
+        memory: None,
+        diversity: None,
+    };
+
+    for obs in observations {
+        if let Some(dim) = obs.get("dimension").and_then(|v| v.as_str()) {
+            match dim {
+                "token" => {
+                    if let Some(rate) = obs.get("cache_hit_rate").and_then(|v| v.as_f64()) {
+                        dims.token_efficiency = rate;
+                    }
+                }
+                "latency" => {
+                    if let Some(ms) = obs.get("avg_ms").and_then(|v| v.as_f64()) {
+                        // Normalize: <500ms = 1.0, >5000ms = 0.0
+                        dims.latency = (1.0 - (ms / 5000.0).min(1.0)).max(0.0);
+                    }
+                }
+                "cost" => {
+                    if let Some(rate) = obs.get("cost_per_turn").and_then(|v| v.as_f64()) {
+                        // Normalize: $0 cost = 1.0, high cost = lower
+                        dims.cost = (1.0 - (rate / 2.0).min(1.0)).max(0.0);
+                    }
+                }
+                "security" => {
+                    if let Some(issues) = obs.get("issues_found").and_then(|v| v.as_u64()) {
+                        dims.security = if issues == 0 { 1.0 } else { 0.7 };
+                    }
+                }
+                "orchestration" => {
+                    if let Some(score) = obs.get("multi_agent_score").and_then(|v| v.as_f64()) {
+                        dims.orchestration = score;
+                    }
+                }
+                "context_quality" => {
+                    if let Some(ratio) = obs.get("context_ratio").and_then(|v| v.as_f64()) {
+                        dims.context_quality = (1.0 - ratio.min(1.0)).max(0.0);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    dims
+}
+
 /// Convert a Claude Code / agentic hook event into a harness AgentEvent.
-///
-/// This is the universal event mapper. It handles hook events from Claude Code,
-/// LangGraph callbacks, CrewAI step events, AutoGen messages, etc.
 fn hook_to_agent_event(
     hook_name: &str,
     agent_id: &str,
@@ -322,7 +559,6 @@ fn hook_to_agent_event(
     timestamp_ms: u64,
 ) -> Option<AgentEvent> {
     let ts = if timestamp_ms > 0 {
-        // Convert epoch millis to DateTime<Utc>
         let secs = (timestamp_ms / 1000) as i64;
         let nsecs = ((timestamp_ms % 1000) * 1_000_000) as u32;
         chrono::DateTime::from_timestamp(secs, nsecs).unwrap_or_else(Utc::now)
@@ -331,7 +567,6 @@ fn hook_to_agent_event(
     };
 
     match hook_name {
-        // ── Lifecycle ──
         "SessionStart" | "Setup" => {
             let task = payload
                 .get("prompt")
@@ -359,8 +594,6 @@ fn hook_to_agent_event(
                 timestamp: ts,
             })
         }
-
-        // ── User input ──
         "UserPromptSubmit" => {
             let text = payload
                 .get("prompt")
@@ -374,8 +607,6 @@ fn hook_to_agent_event(
                 timestamp: ts,
             })
         }
-
-        // ── Tool calls ──
         "PreToolUse" => {
             let args = payload.get("tool_input").cloned().unwrap_or(json!({}));
             Some(AgentEvent::ToolCallStart {
@@ -386,7 +617,6 @@ fn hook_to_agent_event(
             })
         }
         "PostToolUse" => {
-            // Extract tool result from response
             let tool_response = payload.get("tool_response");
             let content = tool_response.and_then(|v| v.as_str()).unwrap_or("");
             let is_error = payload
@@ -394,7 +624,6 @@ fn hook_to_agent_event(
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
 
-            // Try to extract usage from tool_response
             let usage = payload.get("tool_use_result").or(tool_response);
             let token_count = usage
                 .and_then(|v| v.get("usage"))
@@ -408,7 +637,7 @@ fn hook_to_agent_event(
                 result: forge_sdk::events::ToolResult {
                     content: content.to_string(),
                     is_error,
-                    duration_ms: 0, // extracted from timing data if available
+                    duration_ms: 0,
                     token_count,
                 },
                 timestamp: ts,
@@ -429,8 +658,6 @@ fn hook_to_agent_event(
             },
             timestamp: ts,
         }),
-
-        // ── Thinking / Reasoning ──
         "PreCompact" => {
             let ratio = payload
                 .get("context_ratio")
@@ -443,8 +670,6 @@ fn hook_to_agent_event(
                 timestamp: ts,
             })
         }
-
-        // ── Sub-agents ──
         "SubagentStart" => {
             let child_id = payload
                 .get("subagent_id")
@@ -470,21 +695,6 @@ fn hook_to_agent_event(
             summary: "Subagent finished".into(),
             timestamp: ts,
         }),
-
-        // ── Configuration / Context ──
-        "CwdChanged" | "FileChanged" | "ConfigChange" => Some(AgentEvent::StateTransition {
-            agent_id: agent_id.to_string(),
-            from: "previous".into(),
-            to: hook_name.to_string(),
-            condition: payload
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            timestamp: ts,
-        }),
-
-        // ── Output (for streaming agents) ──
         "Notification" => {
             let text = payload
                 .get("message")
@@ -501,43 +711,19 @@ fn hook_to_agent_event(
                 None
             }
         }
-
-        // ── Other events we store but don't map to specific AgentEvent ──
-        "UserPromptExpansion"
-        | "PostToolBatch"
-        | "PermissionRequest"
-        | "PermissionDenied"
-        | "TeammateIdle"
-        | "TaskCreated"
-        | "TaskCompleted"
-        | "InstructionsLoaded"
-        | "PostCompact"
-        | "Elicitation"
-        | "ElicitationResult"
-        | "WorktreeRemove" => {
-            // Store as a lightweight output or state transition
-            Some(AgentEvent::OutputDelta {
-                agent_id: agent_id.to_string(),
-                text: format!(
-                    "[{}] {}",
-                    hook_name,
-                    payload
-                        .get("summary")
-                        .or(payload.get("description"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                ),
-                timestamp: ts,
-            })
-        }
-
-        _ => {
-            // Unknown event type — still store for audit
-            Some(AgentEvent::OutputDelta {
-                agent_id: agent_id.to_string(),
-                text: format!("[{}]", hook_name),
-                timestamp: ts,
-            })
-        }
+        // Other events — store for audit
+        _ => Some(AgentEvent::OutputDelta {
+            agent_id: agent_id.to_string(),
+            text: format!(
+                "[{}] {}",
+                hook_name,
+                payload
+                    .get("summary")
+                    .or(payload.get("description"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            timestamp: ts,
+        }),
     }
 }

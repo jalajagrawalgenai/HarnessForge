@@ -2,6 +2,8 @@
 //!
 //! Holds all active and completed sessions. Each session has a broadcast
 //! channel that WebSocket/SSE consumers subscribe to for live events.
+//! Each session also holds a PluginRegistry for running the harness pipeline
+//! (observers → detectors → strategies) on ingested events.
 
 use chrono::{DateTime, Utc};
 use forge_sdk::events::{AgentEvent, Intervention};
@@ -55,6 +57,17 @@ pub struct SessionState {
     pub intervention_tx: mpsc::Sender<Intervention>,
     /// Channel to cancel a running session
     pub cancel_tx: watch::Sender<bool>,
+    // ── Harness pipeline state ──
+    /// Accumulated observer results (dimension → latest value)
+    pub observations: Vec<serde_json::Value>,
+    /// Detected issues from detector runs (as JSON)
+    pub detections: Vec<serde_json::Value>,
+    /// Strategy results from intervention evaluation (as JSON)
+    pub strategy_results: Vec<serde_json::Value>,
+    /// Applied interventions (as JSON)
+    pub interventions: Vec<serde_json::Value>,
+    /// Count of events ingested (used for cycle scheduling)
+    pub event_count: u64,
 }
 
 /// Thread-safe shared session store.
@@ -85,6 +98,11 @@ impl SessionState {
             event_broadcaster,
             intervention_tx,
             cancel_tx,
+            observations: Vec::new(),
+            detections: Vec::new(),
+            strategy_results: Vec::new(),
+            interventions: Vec::new(),
+            event_count: 0,
         }
     }
 }
