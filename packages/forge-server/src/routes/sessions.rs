@@ -129,9 +129,9 @@ pub async fn resume(State(state): State<Arc<AppState>>, Path(id): Path<String>) 
 }
 
 /// GET /v1/sessions/:id/analysis
-/// Returns a complete, human-readable analysis of the session including:
-/// token breakdown, tool usage, context health, loop detection, degradation,
-/// health scores with explanations, stop reason, and recommendations.
+///
+/// Returns a COMPLETE, exhaustive analysis of the session.
+/// Every event, every hook, every tool call, every prompt — nothing hidden.
 pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Json<Value> {
     let sessions = state.store.read().await;
     let s = match sessions.get(&id) {
@@ -140,7 +140,6 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
     };
 
     let total_tokens = s.total_input_tokens + s.total_output_tokens;
-    let _cache_total = s.total_cache_read + s.total_cache_write;
     let cache_hit_pct = if s.total_input_tokens > 0 {
         (s.total_cache_read as f64 / s.total_input_tokens as f64) * 100.0
     } else {
@@ -152,105 +151,82 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
     let (input_price, output_price, model_family) = model_pricing(model);
     let est_cost =
         (s.total_input_tokens as f64 * input_price) + (s.total_output_tokens as f64 * output_price);
-    let cache_savings = s.total_cache_read as f64 * input_price * 0.9; // cache reads save 90% of input cost
+    let cache_savings = s.total_cache_read as f64 * input_price * 0.9;
     let effective_cost = est_cost - cache_savings;
+    let is_estimated = s.total_cache_read == 0 && s.total_cache_write == 0;
 
-    // Tool usage analysis
     let total_tool_calls: u64 = s.tool_counts.values().sum();
     let total_tool_errors: u64 = s.tool_errors.values().sum();
-    let mut tool_breakdown: Vec<Value> = s.tool_counts.iter()
-        .map(|(name, count)| {
-            let errors = s.tool_errors.get(name).copied().unwrap_or(0);
-            let pct = if total_tool_calls > 0 { (*count as f64 / total_tool_calls as f64) * 100.0 } else { 0.0 };
-            json!({
-                "tool": name,
-                "calls": count,
-                "errors": errors,
-                "error_rate_pct": if *count > 0 { (errors as f64 / *count as f64) * 100.0 } else { 0.0 },
-                "pct_of_total": pct,
-            })
-        })
-        .collect();
-    tool_breakdown.sort_by(|a, b| b["calls"].as_u64().cmp(&a["calls"].as_u64()));
 
-    // Context pressure analysis
-    let context_peaks = s.context_pressure_history.len();
-    let context_avg = if context_peaks > 0 {
-        s.context_pressure_history.iter().sum::<f64>() / context_peaks as f64
-    } else {
-        0.0
-    };
-    let context_max = s
-        .context_pressure_history
-        .iter()
-        .cloned()
-        .fold(0.0f64, f64::max);
-    let compaction_events = s.context_pressure_history.len();
+    let context_avg = if !s.context_pressure_history.is_empty() {
+        s.context_pressure_history.iter().sum::<f64>() / s.context_pressure_history.len() as f64
+    } else { 0.0 };
+    let context_max = s.context_pressure_history.iter().cloned().fold(0.0f64, f64::max);
 
-    // Health analysis with explanations
-    let hs = s.health_score.as_ref();
-    let health_verdict = match hs {
+    let duration_secs = s.completed_at
+        .map(|t| (t - s.created_at).num_seconds())
+        .unwrap_or_else(|| (Utc::now() - s.created_at).num_seconds());
+
+    // ── Build comprehensive event/hook/tool/prompt trace ──
+    let full_events = build_full_event_log(&s.events);
+    let hook_trace = build_hook_trace(&s.events, &s.event_hooks);
+    let tool_instances = build_tool_instances(&s.events);
+    let prompt_instances = build_prompt_instances(&s.events, &s.prompt_history);
+    let detector_report = build_detector_report(&s.detections, &s.interventions, &s.strategy_results);
+
+    // ── Recommendations ──
+    let mut recommendations: Vec<String> = Vec::new();
+    if cache_hit_pct < 20.0 && total_tokens > 1000 {
+        recommendations.push("Low cache hit rate — enable prompt caching to reduce costs".into());
+    }
+    if total_tool_errors > 0 && total_tool_errors as f64 / total_tool_calls.max(1) as f64 > 0.1 {
+        recommendations.push("High tool error rate — review tool definitions and error handling".into());
+    }
+    if context_avg > 0.75 {
+        recommendations.push("Context pressure consistently high — compact more aggressively".into());
+    }
+    if s.subagent_count > 5 {
+        recommendations.push("High subagent spawn count — consider consolidating tasks".into());
+    }
+    if s.event_count > 100 && s.detections.is_empty() {
+        recommendations.push("No issues detected across many events — agent is running well".into());
+    }
+
+    let health_verdict = match s.health_score.as_ref() {
         Some(h) if h.overall > 0.8 => "Healthy — agent performing well across all dimensions",
         Some(h) if h.overall > 0.6 => "Moderate — some dimensions need attention",
         Some(h) if h.overall > 0.4 => "Degraded — multiple issues detected",
         Some(_) => "Critical — agent requires immediate intervention",
-        None => "No health data yet — run more events to build analysis",
+        None => "No health data yet",
     };
 
-    // Stop reason analysis
     let stop_analysis = match (&s.stop_reason, &s.status) {
-        (Some(reason), crate::session::store::SessionStatus::Completed) => {
-            format!("✅ Session completed normally. {}", reason)
-        }
-        (Some(reason), crate::session::store::SessionStatus::Failed) => {
-            format!("❌ Session failed: {}", reason)
-        }
-        (None, crate::session::store::SessionStatus::Running) => {
-            "🟢 Session is still running — no stop reason yet".to_string()
-        }
-        (None, _) => "Session ended without recording a stop reason".to_string(),
-        _ => format!("Session status: {:?}", s.status),
+        (Some(reason), crate::session::store::SessionStatus::Completed) =>
+            format!("✅ Completed: {}", reason),
+        (Some(reason), crate::session::store::SessionStatus::Failed) =>
+            format!("❌ Failed: {}", reason),
+        (None, crate::session::store::SessionStatus::Running) =>
+            "🟢 Still running".to_string(),
+        _ => format!("Status: {:?}", s.status),
     };
-
-    // Duration
-    let duration_secs = s
-        .completed_at
-        .map(|t| (t - s.created_at).num_seconds())
-        .unwrap_or_else(|| (Utc::now() - s.created_at).num_seconds());
-
-    // Generate recommendations
-    let mut recommendations: Vec<&str> = Vec::new();
-    if cache_hit_pct < 20.0 && total_tokens > 1000 {
-        recommendations
-            .push("Low cache hit rate — consider enabling prompt caching to reduce costs");
-    }
-    if total_tool_errors > 0 && total_tool_errors as f64 / total_tool_calls.max(1) as f64 > 0.1 {
-        recommendations.push("High tool error rate — review tool definitions and error handling");
-    }
-    if context_avg > 0.75 {
-        recommendations.push("Context pressure consistently high — compact more aggressively or reduce conversation length");
-    }
-    if s.subagent_count > 5 {
-        recommendations
-            .push("High subagent spawn count — consider consolidating tasks to reduce overhead");
-    }
-    if s.event_count > 100 && s.detections.is_empty() {
-        recommendations.push("No issues detected across many events — your agent is running well");
-    }
-    if !s.degradation_warnings.is_empty() {
-        recommendations.push("Output degradation detected — review agent prompts and tool outputs");
-    }
 
     Json(json!({
+        // ── OVERVIEW ──
         "session_id": s.id,
         "task": s.task,
         "agent_type": s.agent_type,
+        "preset": s.preset,
         "status": s.status.to_string(),
         "duration_secs": duration_secs,
+        "duration_display": format_duration(duration_secs),
         "model": s.model_name,
+        "model_family": model_family,
+        "stop_reason": s.stop_reason,
         "stop_analysis": stop_analysis,
         "health_verdict": health_verdict,
+        "health_score": s.health_score,
 
+        // ── TOKEN & COST ──
         "token_analysis": {
             "total_tokens": total_tokens,
             "input_tokens": s.total_input_tokens,
@@ -258,83 +234,565 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
             "cache_read_tokens": s.total_cache_read,
             "cache_write_tokens": s.total_cache_write,
             "cache_hit_pct": cache_hit_pct,
-            "estimated_cost_usd": effective_cost,
             "gross_cost_usd": est_cost,
             "cache_savings_usd": cache_savings,
-            "model_family": model_family,
-            "input_price_per_m": input_price * 1_000_000.0,
-            "output_price_per_m": output_price * 1_000_000.0,
-            "token_efficiency": if total_tokens > 0 {
-                (s.total_output_tokens as f64 / total_tokens.max(1) as f64) * 100.0
-            } else { 0.0 },
+            "effective_cost_usd": effective_cost,
+            "input_price_per_1m": input_price * 1_000_000.0,
+            "output_price_per_1m": output_price * 1_000_000.0,
+            "is_estimated": is_estimated,
+            "data_source": if is_estimated { "estimated (heuristic — use transcript hook for precision)" } else { "transcript" },
+            "tokens_per_event": if s.event_count > 0 { total_tokens as f64 / s.event_count as f64 } else { 0.0 },
+            "output_to_input_ratio": if s.total_input_tokens > 0 { s.total_output_tokens as f64 / s.total_input_tokens as f64 } else { 0.0 },
         },
 
-        "tool_analysis": {
+        // ── TOOL SUMMARY ──
+        "tool_summary": {
             "total_calls": total_tool_calls,
             "total_errors": total_tool_errors,
-            "error_rate_pct": if total_tool_calls > 0 {
-                (total_tool_errors as f64 / total_tool_calls as f64) * 100.0
-            } else { 0.0 },
+            "error_rate_pct": if total_tool_calls > 0 { (total_tool_errors as f64 / total_tool_calls as f64) * 100.0 } else { 0.0 },
             "unique_tools": s.tool_counts.len(),
             "total_duration_ms": s.total_tool_ms,
-            "breakdown": tool_breakdown,
+            "by_tool": s.tool_counts.iter().map(|(name, count)| {
+                let errors = s.tool_errors.get(name).copied().unwrap_or(0);
+                json!({
+                    "tool": name,
+                    "calls": count,
+                    "errors": errors,
+                    "error_rate_pct": if *count > 0 { (errors as f64 / *count as f64) * 100.0 } else { 0.0 },
+                    "pct_of_total": if total_tool_calls > 0 { (*count as f64 / total_tool_calls as f64) * 100.0 } else { 0.0 },
+                })
+            }).collect::<Vec<_>>(),
         },
 
+        // ── CONTEXT ANALYSIS ──
         "context_analysis": {
-            "compaction_events": compaction_events,
+            "pressure_readings": s.context_pressure_history.len(),
             "avg_pressure_pct": context_avg * 100.0,
             "max_pressure_pct": context_max * 100.0,
+            "pressure_history": s.context_pressure_history.iter().map(|p| (p * 100.0) as u32).collect::<Vec<_>>(),
             "status": if context_max > 0.85 { "critical" } else if context_avg > 0.6 { "warning" } else { "healthy" },
         },
 
-        "loop_analysis": {
-            "patterns_detected": s.loop_patterns.len(),
-            "patterns": s.loop_patterns,
-        },
-
-        "degradation_analysis": {
-            "warnings": s.degradation_warnings.len(),
-            "details": s.degradation_warnings,
-        },
-
-        "health_analysis": {
-            "overall": hs.map(|h| h.overall).unwrap_or(1.0),
-            "verdict": health_verdict,
-            "dimensions": hs.map(|h| json!({
-                "token_efficiency": h.dimensions.token_efficiency,
-                "latency": h.dimensions.latency,
-                "cost": h.dimensions.cost,
-                "accuracy": h.dimensions.accuracy,
-                "orchestration": h.dimensions.orchestration,
-                "security": h.dimensions.security,
-                "reliability": h.dimensions.reliability,
-                "context_quality": h.dimensions.context_quality,
-                "compliance": h.dimensions.compliance,
-            })),
-        },
-
+        // ── SESSION SUMMARY ──
         "session_summary": {
             "total_events": s.event_count,
             "user_prompts": s.user_prompt_count,
             "subagents_spawned": s.subagent_count,
-            "detections": s.detections.len(),
-            "interventions": s.interventions.len(),
-            "observations": s.observations.len(),
+            "total_detections": s.detections.len(),
+            "total_interventions": s.interventions.len(),
+            "total_observations": s.observations.len(),
+            "total_strategies": s.strategy_results.len(),
         },
 
-        // Observation details grouped by dimension
-        "observation_details": group_observations_by_dimension(&s.observations),
+        // ── FULL EVENT LOG — every event with all fields ──
+        "event_log": full_events,
+        "event_count": full_events.len(),
 
-        // Raw detection and intervention data for deep inspection
+        // ── HOOK TRACE — grouped by hook type ──
+        "hook_trace": hook_trace,
+
+        // ── TOOL INSTANCES — every individual tool call ──
+        "tool_instances": tool_instances,
+
+        // ── PROMPT INSTANCES — every prompt with context ──
+        "prompt_instances": prompt_instances,
+        "prompt_history": s.prompt_history.iter().enumerate().map(|(i, p)| json!({
+            "index": i + 1,
+            "text": p,
+            "length": p.len(),
+            "estimated_tokens": (p.len() as f64 / 4.0).ceil() as u64,
+        })).collect::<Vec<_>>(),
+
+        // ── DETECTOR REPORT ──
+        "detector_report": detector_report,
         "detection_details": s.detections.clone(),
         "intervention_details": s.interventions.clone(),
         "strategy_details": s.strategy_results.clone(),
 
-        // Build event log from raw events
-        "event_log": build_event_log(&s.events),
+        // ── OBSERVATION DETAILS ──
+        "observation_details": group_observations_by_dimension(&s.observations),
 
+        // ── RECOMMENDATIONS ──
         "recommendations": recommendations,
     }))
+}
+
+/// Format seconds into human-readable duration.
+fn format_duration(secs: i64) -> String {
+    if secs < 60 { return format!("{}s", secs); }
+    if secs < 3600 { return format!("{}m {}s", secs / 60, secs % 60); }
+    format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+}
+
+/// Build a FULL event log — every event with all fields, nothing truncated.
+fn build_full_event_log(events: &[forge_sdk::events::AgentEvent]) -> Vec<Value> {
+    use forge_sdk::events::AgentEvent;
+    events.iter().enumerate().filter_map(|(i, e)| {
+        match e {
+            AgentEvent::Started { agent_id, task, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "session_start",
+                "icon": "▶",
+                "agent_id": agent_id,
+                "task": task,
+            })),
+            AgentEvent::Completed { agent_id, summary, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "session_end",
+                "icon": "✓",
+                "agent_id": agent_id,
+                "summary": summary,
+            })),
+            AgentEvent::Failed { agent_id, error, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "session_failed",
+                "icon": "✗",
+                "agent_id": agent_id,
+                "error": error,
+            })),
+            AgentEvent::ToolCallStart { agent_id, tool, args, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "tool_start",
+                "icon": "→",
+                "agent_id": agent_id,
+                "tool": tool,
+                "args": args,
+                "args_display": format_tool_detail(tool, args),
+            })),
+            AgentEvent::ToolCallEnd { agent_id, tool, result, timestamp } => {
+                let status = if result.is_error { "FAILED" } else { "ok" };
+                Some(json!({
+                    "seq": i + 1,
+                    "time": timestamp.to_rfc3339(),
+                    "type": "tool_end",
+                    "icon": if result.is_error { "✗" } else { "←" },
+                    "agent_id": agent_id,
+                    "tool": tool,
+                    "status": status,
+                    "is_error": result.is_error,
+                    "duration_ms": result.duration_ms,
+                    "token_count": result.token_count,
+                    "result": if result.content.len() > 500 {
+                        format!("{}... [{} more chars]", &result.content[..500], result.content.len() - 500)
+                    } else {
+                        result.content.clone()
+                    },
+                    "result_full_len": result.content.len(),
+                }))
+            }
+            AgentEvent::MessageSent { from, to, content, timestamp } => {
+                let text = match content {
+                    forge_sdk::events::MessageContent::Text(t) => t.clone(),
+                    _ => String::new(),
+                };
+                if text.is_empty() { return None; }
+                Some(json!({
+                    "seq": i + 1,
+                    "time": timestamp.to_rfc3339(),
+                    "type": "user_prompt",
+                    "icon": "💬",
+                    "from": from,
+                    "to": to,
+                    "text": text,
+                    "text_len": text.len(),
+                    "estimated_tokens": (text.len() as f64 / 4.0).ceil() as u64,
+                }))
+            }
+            AgentEvent::ContextPressure { agent_id, current_ratio, trend, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "context_pressure",
+                "icon": "📐",
+                "agent_id": agent_id,
+                "current_ratio": current_ratio,
+                "pressure_pct": (current_ratio * 100.0) as u32,
+                "trend": trend,
+            })),
+            AgentEvent::Forked { parent_id, child_id, task, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "subagent_fork",
+                "icon": "⑂",
+                "parent": parent_id,
+                "child": child_id,
+                "task": task,
+            })),
+            AgentEvent::TokenUsage { agent_id, input, output, cache_read, cache_write, model, timestamp } => Some(json!({
+                "seq": i + 1,
+                "time": timestamp.to_rfc3339(),
+                "type": "token_usage",
+                "icon": "📊",
+                "agent_id": agent_id,
+                "input_tokens": input,
+                "output_tokens": output,
+                "cache_read": cache_read,
+                "cache_write": cache_write,
+                "model": model,
+                "total": input + output,
+            })),
+            AgentEvent::OutputDelta { agent_id, text, timestamp } => {
+                if text.is_empty() || text.starts_with('[') { return None; }
+                Some(json!({
+                    "seq": i + 1,
+                    "time": timestamp.to_rfc3339(),
+                    "type": "output",
+                    "icon": "→",
+                    "agent_id": agent_id,
+                    "text": text,
+                    "text_len": text.len(),
+                }))
+            }
+            _ => {
+                // Generic fallback for any other event type
+                let val = serde_json::to_value(e).unwrap_or(json!({}));
+                Some(json!({
+                    "seq": i + 1,
+                    "time": "",
+                    "type": "other",
+                    "icon": "●",
+                    "raw": val,
+                }))
+            }
+        }
+    }).collect()
+}
+
+/// Build hook trace — use stored hook names when available, fall back to
+/// inferring from AgentEvent variants.
+fn build_hook_trace(events: &[forge_sdk::events::AgentEvent], hooks: &[String]) -> Vec<Value> {
+    use std::collections::HashMap;
+    use forge_sdk::events::AgentEvent;
+
+    let use_stored = hooks.len() >= events.len();
+    let mut hook_groups: HashMap<String, Vec<Value>> = HashMap::new();
+    let n = if use_stored { events.len() } else { events.len() };
+
+    // If no stored hooks, infer from event variants
+    fn infer_hook(ev: &AgentEvent) -> &str {
+        match ev {
+            AgentEvent::Started { .. } => "SessionStart",
+            AgentEvent::Completed { .. } => "SessionEnd",
+            AgentEvent::Failed { .. } => "StopFailure",
+            AgentEvent::ToolCallStart { .. } => "PreToolUse",
+            AgentEvent::ToolCallEnd { result, .. } => {
+                if result.is_error { "PostToolUseFailure" } else { "PostToolUse" }
+            }
+            AgentEvent::MessageSent { .. } => "UserPromptSubmit",
+            AgentEvent::ContextPressure { .. } => "PreCompact",
+            AgentEvent::Forked { .. } => "SubagentStart",
+            AgentEvent::TokenUsage { .. } => "Transcript",
+            AgentEvent::OutputDelta { .. } => "Notification",
+            _ => "Other",
+        }
+    }
+
+    for i in 0..n {
+        let hook = if use_stored { hooks[i].clone() } else { infer_hook(&events[i]).to_string() };
+        let ev = &events[i];
+        let entry = match ev {
+            forge_sdk::events::AgentEvent::Started { task, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(), "detail": task,
+            }),
+            forge_sdk::events::AgentEvent::Completed { summary, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(), "detail": summary,
+            }),
+            forge_sdk::events::AgentEvent::Failed { error, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(), "detail": error,
+            }),
+            forge_sdk::events::AgentEvent::ToolCallStart { tool, args, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(), "tool": tool,
+                "args_display": format_tool_detail(tool, args),
+            }),
+            forge_sdk::events::AgentEvent::ToolCallEnd { tool, result, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(), "tool": tool,
+                "is_error": result.is_error, "duration_ms": result.duration_ms,
+                "result_preview": if result.content.len() > 200 { format!("{}...", &result.content[..200]) } else { result.content.clone() },
+                "token_count": result.token_count,
+            }),
+            forge_sdk::events::AgentEvent::MessageSent { from, content, timestamp, .. } => {
+                let text = match content {
+                    forge_sdk::events::MessageContent::Text(t) => t.clone(),
+                    _ => String::new(),
+                };
+                json!({
+                    "seq": i + 1, "time": timestamp.to_rfc3339(), "from": from,
+                    "text": if text.len() > 200 { format!("{}...", &text[..200]) } else { text },
+                })
+            }
+            forge_sdk::events::AgentEvent::ContextPressure { current_ratio, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(),
+                "pressure_pct": (current_ratio * 100.0) as u32,
+            }),
+            forge_sdk::events::AgentEvent::Forked { child_id, task, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(), "child": child_id, "task": task,
+            }),
+            forge_sdk::events::AgentEvent::TokenUsage { input, output, model, timestamp, .. } => json!({
+                "seq": i + 1, "time": timestamp.to_rfc3339(),
+                "input": input, "output": output, "model": model,
+            }),
+            _ => json!({"seq": i + 1, "detail": format!("{:?}", ev)}),
+        };
+        hook_groups.entry(hook.clone()).or_default().push(entry);
+    }
+
+    // Known hook order for consistent display
+    let hook_order = [
+        "SessionStart", "UserPromptSubmit",
+        "PreToolUse", "PostToolUse", "PostToolUseFailure",
+        "PreCompact", "PostCompact",
+        "Notification",
+        "SubagentStart", "SubagentStop",
+        "Transcript",
+        "SessionEnd", "Stop", "StopFailure",
+    ];
+
+    let mut result = Vec::new();
+    for &hook_name in &hook_order {
+        if let Some(entries) = hook_groups.remove(hook_name) {
+            result.push(json!({
+                "hook": hook_name,
+                "description": hook_description(hook_name),
+                "count": entries.len(),
+                "events": entries,
+            }));
+        }
+    }
+    // Any remaining hooks (unexpected/custom)
+    for (hook_name, entries) in hook_groups {
+        result.push(json!({
+            "hook": hook_name,
+            "description": "Hook event",
+            "count": entries.len(),
+            "events": entries,
+        }));
+    }
+    result
+}
+
+fn hook_description(hook: &str) -> &str {
+    match hook {
+        "SessionStart" => "Session begins — first contact from agent",
+        "UserPromptSubmit" => "User submitted a prompt/message",
+        "PreToolUse" => "Tool is about to be called (before execution)",
+        "PostToolUse" => "Tool finished executing (result available)",
+        "PostToolUseFailure" => "Tool execution failed",
+        "PreCompact" => "Context compaction about to occur",
+        "Notification" => "Agent sent a notification",
+        "SubagentStart" => "Subagent was forked/spawned",
+        "SubagentStop" => "Subagent finished",
+        "Transcript" => "Transcript summary data received (tokens, model)",
+        "SessionEnd" => "Session ended normally",
+        "Stop" => "Agent was stopped",
+        "StopFailure" => "Session ended with error",
+        _ => "Other event",
+    }
+}
+
+/// Build tool instances — every individual tool call with full args and result.
+fn build_tool_instances(events: &[forge_sdk::events::AgentEvent]) -> Vec<Value> {
+    use forge_sdk::events::AgentEvent;
+    let mut instances = Vec::new();
+    let mut pending_starts: std::collections::HashMap<String, (usize, Value, String)> = std::collections::HashMap::new();
+
+    for (i, e) in events.iter().enumerate() {
+        match e {
+            AgentEvent::ToolCallStart { agent_id, tool, args, .. } => {
+                pending_starts.insert(agent_id.clone(), (i, args.clone(), tool.clone()));
+            }
+            AgentEvent::ToolCallEnd { agent_id, tool, result, timestamp } => {
+                // Try to match with a pending ToolCallStart for better args display
+                let args_display = if let Some((_, args, started_tool)) = pending_starts.remove(agent_id) {
+                    if started_tool == *tool {
+                        format_tool_detail(tool, &args)
+                    } else {
+                        // Tool mismatch — use fallback from result content
+                        extract_args_from_result(tool, &result.content)
+                    }
+                } else {
+                    // No matching start — extract from result content or use generic display
+                    extract_args_from_result(tool, &result.content)
+                };
+
+                instances.push(json!({
+                    "seq": i + 1,
+                    "time": timestamp.to_rfc3339(),
+                    "tool": tool,
+                    "args_display": args_display,
+                    "is_error": result.is_error,
+                    "duration_ms": result.duration_ms,
+                    "token_count": result.token_count,
+                    "result": if result.content.len() > 300 {
+                        format!("{}... [{} total chars]", &result.content[..300], result.content.len())
+                    } else {
+                        result.content.clone()
+                    },
+                    "result_full_len": result.content.len(),
+                }));
+            }
+            _ => {}
+        }
+    }
+    instances
+}
+
+/// Extract a human-readable args display from tool result content when no ToolCallStart is available.
+fn extract_args_from_result(tool: &str, content: &str) -> String {
+    match tool {
+        "Read" | "Glob" | "Grep" => {
+            // Result often contains file paths or search patterns
+            let first_line = content.lines().next().unwrap_or("");
+            if first_line.len() > 80 {
+                format!("{}: {}...", tool, &first_line[..80])
+            } else {
+                format!("{}: {}", tool, first_line)
+            }
+        }
+        "Bash" | "PowerShell" => {
+            // Try to extract command from result — often the result starts with the command output
+            // The first line of content is usually the most descriptive
+            let first_line = content.lines().next().unwrap_or("");
+            if first_line.len() > 80 {
+                format!("$ {}...", &first_line[..80])
+            } else if !first_line.is_empty() {
+                format!("$ {}", first_line)
+            } else {
+                format!("{} executed", tool)
+            }
+        }
+        "Write" | "Edit" => {
+            // First line describes what was written
+            let first_line = content.lines().next().unwrap_or("");
+            if !first_line.is_empty() && first_line.len() < 100 {
+                first_line.to_string()
+            } else {
+                format!("{} completed", tool)
+            }
+        }
+        "WebFetch" | "WebSearch" => {
+            format!("{} completed", tool)
+        }
+        _ => {
+            let first_line = content.lines().next().unwrap_or("");
+            if !first_line.is_empty() && first_line.len() < 80 {
+                format!("{}: {}", tool, first_line)
+            } else {
+                format!("{} completed", tool)
+            }
+        }
+    }
+}
+
+/// Build prompt instances — each user prompt with context of what followed.
+fn build_prompt_instances(events: &[forge_sdk::events::AgentEvent], prompt_history: &[String]) -> Vec<Value> {
+    use forge_sdk::events::AgentEvent;
+    let mut instances = Vec::new();
+    let mut prompt_idx = 0usize;
+
+    for (i, e) in events.iter().enumerate() {
+        if let AgentEvent::MessageSent { from, content, timestamp, .. } = e {
+            if from != "user" { continue; }
+            let text = match content {
+                forge_sdk::events::MessageContent::Text(t) => t.clone(),
+                _ => continue,
+            };
+            if text.is_empty() { continue; }
+
+            // Find subsequent tool calls and responses until next prompt or session end
+            let mut following_tools = Vec::new();
+            let mut following_tokens = 0u64;
+            let mut response_latency_ms: Option<u64> = None;
+
+            for subsequent in events.iter().skip(i + 1) {
+                match subsequent {
+                    AgentEvent::ToolCallEnd { result, .. } => {
+                        following_tools.push(json!({
+                            "tool": "",
+                            "is_error": result.is_error,
+                            "duration_ms": result.duration_ms,
+                        }));
+                        if response_latency_ms.is_none() {
+                            response_latency_ms = Some(result.duration_ms);
+                        }
+                    }
+                    AgentEvent::TokenUsage { input, output, .. } => {
+                        following_tokens += input + output;
+                    }
+                    AgentEvent::MessageSent { from: f, .. } if f == "user" => break,
+                    AgentEvent::Started { .. } | AgentEvent::Completed { .. } => break,
+                    _ => {}
+                }
+            }
+
+            let prompt_text = prompt_history.get(prompt_idx).cloned().unwrap_or(text);
+            prompt_idx += 1;
+
+            instances.push(json!({
+                "seq": i + 1,
+                "index": prompt_idx,
+                "time": timestamp.to_rfc3339(),
+                "text": prompt_text,
+                "text_len": prompt_text.len(),
+                "estimated_input_tokens": (prompt_text.len() as f64 / 4.0).ceil() as u64,
+                "following_tool_calls": following_tools.len(),
+                "following_tokens": following_tokens,
+                "first_response_latency_ms": response_latency_ms,
+                "tools_after": following_tools,
+            }));
+        }
+    }
+    instances
+}
+
+/// Build detector report — what detectors found, what interventions were applied.
+fn build_detector_report(
+    detections: &[Value],
+    interventions: &[Value],
+    strategies: &[Value],
+) -> Value {
+    // Group detections by category
+    let mut by_category: std::collections::HashMap<String, Vec<&Value>> = std::collections::HashMap::new();
+    for d in detections {
+        if let Some(cat) = d.get("category").and_then(|c| c.as_str()) {
+            by_category.entry(cat.to_string()).or_default().push(d);
+        }
+    }
+
+    let categories: Vec<Value> = by_category.iter().map(|(cat, items)| {
+        let severities: Vec<&str> = items.iter()
+            .filter_map(|d| d.get("severity").and_then(|s| s.as_str()))
+            .collect();
+        let worst = if severities.iter().any(|s| s.contains("Critical")) { "Critical" }
+            else if severities.iter().any(|s| s.contains("Error")) { "Error" }
+            else if severities.iter().any(|s| s.contains("Warning")) { "Warning" }
+            else { "Info" };
+
+        let confidences: Vec<f64> = items.iter()
+            .filter_map(|d| d.get("confidence").and_then(|c| c.as_f64()))
+            .collect();
+        let avg_conf = if confidences.is_empty() { 0.0 }
+            else { confidences.iter().sum::<f64>() / confidences.len() as f64 };
+
+        json!({
+            "category": cat,
+            "severity": worst,
+            "count": items.len(),
+            "avg_confidence": avg_conf,
+            "instances": items,
+        })
+    }).collect();
+
+    json!({
+        "total_detections": detections.len(),
+        "total_interventions": interventions.len(),
+        "total_strategies": strategies.len(),
+        "by_category": categories,
+        "interventions": interventions,
+        "strategies": strategies,
+    })
 }
 
 /// Build a human-readable event log from raw AgentEvents.

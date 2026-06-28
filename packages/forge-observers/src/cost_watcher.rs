@@ -39,7 +39,13 @@ impl Observer for CostWatcher {
             *total += est_cost;
             self.turn_costs.lock().unwrap().push(est_cost);
             Some(
-                serde_json::json!({"dimension":"cost","turn_cost":est_cost,"total_cost":*total,"model":model}),
+                serde_json::json!({
+                    "dimension":"cost",
+                    "turn_cost":est_cost,
+                    "cost_per_turn":est_cost,  // alias for CostAnomaly + RunawayCost detectors
+                    "total_cost":*total,
+                    "model":model,
+                }),
             )
         } else {
             None

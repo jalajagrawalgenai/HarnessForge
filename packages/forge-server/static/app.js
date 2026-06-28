@@ -131,13 +131,16 @@ function renderSessions() {
         healthHtml = '<span style="color:' + hColor + ';font-weight:600">' + pct + '%</span>';
       }
       var pipe = s.pipeline || {};
-      return '<tr><td><code>' + (s.id||'').substring(0,12) + '</code></td><td>' + (s.task||'').substring(0,30) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td>' + healthHtml + '</td><td>' + (pipe.observation_count||0) + '/' + (pipe.detection_count||0) + '/' + (pipe.intervention_count||0) + '</td><td><a href="javascript:showAnalysis(\'' + s.id + '\')">Analysis</a></td></tr>';
+      var tokens = (s.total_tokens||0);
+      var modelShort = (s.model||'?').substring(0,15);
+      var tokenStr = tokens > 0 ? (tokens >= 1000 ? (tokens/1000).toFixed(1) + 'k' : tokens) : '-';
+      return '<tr><td><code>' + (s.id||'').substring(0,12) + '</code></td><td>' + (s.task||'').substring(0,30) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td>' + healthHtml + '</td><td>' + tokenStr + '</td><td>' + modelShort + '</td><td>' + (pipe.observation_count||0) + '/' + (pipe.detection_count||0) + '/' + (pipe.intervention_count||0) + '</td><td><a href="javascript:showAnalysis(\'' + s.id + '\')">Analysis</a></td></tr>';
     }).join('');
     document.getElementById('content').innerHTML =
       '<div class="card"><h2>Sessions</h2>' +
       '<p style="color:var(--text-secondary);margin-bottom:8px">O/D/I = Observations / Detections / Interventions</p>' +
-      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Health</th><th>O/D/I</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="7">No sessions yet — sessions appear automatically when you use Claude Code or other agents</td></tr>') +
+      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Health</th><th>Tokens</th><th>Model</th><th>O/D/I</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="9">No sessions yet — sessions appear automatically when you use Claude Code or other agents</td></tr>') +
       '</tbody></table></div>';
   });
 }
@@ -148,129 +151,315 @@ function renderSessions() {
 
 function showAnalysis(id) {
   currentPage = 'sessions';
-  document.getElementById('content').innerHTML = '<div style="max-width:1200px;margin:0 auto"><div id="ana-header"><p>Loading harness analysis...</p></div><div id="ana-body"></div></div>';
-
-  // Fetch both analysis summary and raw session data for event breakdown
-  Promise.all([api('/v1/sessions/' + id + '/analysis'), api('/v1/sessions/' + id)]).then(function(results) {
-    var a = results[0];
-    var raw = results[1];
+  document.getElementById('content').innerHTML = '<div style="max-width:1200px;margin:0 auto"><div id="ana-header"><p>Loading harness analysis...</p></div><div id="ana-tabs"></div><div id="ana-body"></div></div>';
+  api('/v1/sessions/' + id + '/analysis').then(function(a) {
     if (a.error) { document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + a.error + '</p></div>'; return; }
-    renderFullAnalysis(a, raw, id);
+    currentAnalysis = a;
+    currentAnalysisId = id;
+    renderAnaTabs(a, id);
+    renderAnaOverview(a, id);
   }).catch(function(e) {
     document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + e.message + '</p></div>';
   });
 }
+var currentAnalysis = null;
+var currentAnalysisId = null;
+var currentAnaTab = 'overview';
 
-function renderFullAnalysis(a, raw, id) {
-  var hs = a.health_analysis || {};
-  var tk = a.token_analysis || {};
-  var tl = a.tool_analysis || {};
-  var cx = a.context_analysis || {};
-  var sm = a.session_summary || {};
-  var recs = a.recommendations || [];
-  var healthPct = Math.round((hs.overall||0) * 100);
-  var healthColor = healthPct > 80 ? 'var(--accent-green)' : healthPct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
-  var cost = tk.estimated_cost_usd || 0;
+function renderAnaTabs(a, id) {
+  var tabs = [
+    {id:'overview', label:'Overview', icon:'📊'},
+    {id:'timeline', label:'Timeline', icon:'📋'},
+    {id:'toolsprompts', label:'Tools & Prompts', icon:'🛠'},
+    {id:'detections', label:'Detections', icon:'⚠'},
+    {id:'hooks', label:'Hooks & Context', icon:'🔗'},
+  ];
+  document.getElementById('ana-tabs').innerHTML = '<div class="flex-row" style="gap:4px;margin-bottom:12px;flex-wrap:wrap">' +
+    tabs.map(function(t) {
+      return '<button onclick="switchAnaTab(\'' + t.id + '\')" id="anatab-' + t.id + '" style="padding:8px 16px;font-size:13px;border-radius:6px;' + (t.id === 'overview' ? 'background:var(--accent-blue);color:#fff' : 'background:var(--bg-secondary)') + '">' + t.icon + ' ' + t.label + '</button>';
+    }).join('') +
+    '<button onclick="generateReport(\'' + id + '\')" class="success" style="margin-left:auto;padding:8px 16px;font-size:13px">📥 Download Report</button>' +
+    '<button onclick="showPage(\'sessions\')" style="padding:8px 16px;font-size:13px">← Back</button></div>';
+}
 
-  // ── Detection and intervention detail data ──
-  var detDetails = a.detection_details || [];
-  var intDetails = a.intervention_details || [];
-
-  // ── Event log ──
-  var eventLog = a.event_log || [];
-  var timelineHtml = eventLog.length > 0 ? eventLog.map(function(ev) {
-    var time = (ev.time||'').substring(11,19) || '';
-    var color = ev.type === 'error' ? 'var(--accent-red)' : ev.type === 'tool_end' && ev.status === 'FAILED' ? 'var(--accent-red)' : ev.type === 'context' ? 'var(--accent-yellow)' : ev.type === 'start' ? 'var(--accent-green)' : 'var(--text-secondary)';
-    return '<div style="padding:3px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;font-size:11px;font-family:monospace">' +
-      '<span style="color:var(--text-secondary);min-width:50px">' + time + '</span>' +
-      '<span>' + ev.icon + '</span>' +
-      '<span style="color:' + color + '">' + (ev.detail||'').substring(0,120) + '</span>' +
-      (ev.tokens > 0 ? '<span style="color:var(--accent-blue);margin-left:auto">' + ev.tokens + ' tok</span>' : '') +
-      '</div>';
-  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No events captured yet</p>';
-
-  // ── Tool usage ──
-  var toolRows = (tl.breakdown||[]).map(function(t) {
-    return '<tr><td><strong>' + t.tool + '</strong></td><td>' + t.calls + '</td><td>' + (t.errors > 0 ? '<span style="color:var(--accent-red)">' + t.errors + '</span>' : '0') + '</td><td>' + (t.pct_of_total||0).toFixed(0) + '%</td></tr>';
-  }).join('');
-
-  // ── Meaningful observations only (skip 100% defaults) ──
-  var obsDetails = a.observation_details || [];
-  var meaningfulObs = obsDetails.filter(function(g) {
-    var d = g.description || '';
-    // Skip pure default observations
-    if (d.indexOf('0 operations, 0.0%') >= 0) return false;
-    if (d.indexOf('0 unique files tracked, 0%') >= 0) return false;
-    if (d.indexOf('0 calls') >= 0) return false;
-    if (d.indexOf('0 lint errors, 100%') >= 0) return false;
-    if (d.indexOf('0 policy violations') >= 0) return false;
-    if (d.indexOf('0 agents, 0 forks') >= 0) return false;
-    if (d.indexOf('0 agent messages') >= 0) return false;
-    return true;
+function switchAnaTab(tab) {
+  currentAnaTab = tab;
+  ['overview','timeline','toolsprompts','detections','hooks'].forEach(function(t) {
+    var btn = document.getElementById('anatab-' + t);
+    if (btn) btn.style.background = t === tab ? 'var(--accent-blue)' : 'var(--bg-secondary)';
+    if (btn) btn.style.color = t === tab ? '#fff' : '';
   });
-  var dimNames = {token:'Token',latency:'Latency',cost:'Cost',accuracy:'Accuracy',security:'Security',reliability:'Reliability',context_quality:'Context',orch:'Orchestration',comm:'Communication',compliance:'Compliance',memory:'Memory',diversity:'Diversity'};
-  var obsHtml = meaningfulObs.length > 0 ? meaningfulObs.map(function(g) {
-    return '<div style="padding:6px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent-green)">●</span> <strong>' + (dimNames[g.dimension]||g.dimension) + '</strong>: ' + (g.description||'') + '</div>';
-  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">Waiting for more events to build observation data...</p>';
+  var a = currentAnalysis;
+  var id = currentAnalysisId;
+  if (tab === 'overview') renderAnaOverview(a, id);
+  else if (tab === 'timeline') renderAnaTimeline(a, id);
+  else if (tab === 'toolsprompts') renderAnaToolsPrompts(a, id);
+  else if (tab === 'detections') renderAnaDetections(a, id);
+  else if (tab === 'hooks') renderAnaHooks(a, id);
+}
 
-  var recsHtml = recs.length > 0 ? recs.map(function(r) { return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">💡 ' + r + '</div>'; }).join('') : '<p style="color:var(--text-secondary)">No recommendations yet — run more agent events</p>';
+// ═══ TAB 1: OVERVIEW ═══
+function renderAnaOverview(a, id) {
+  var tk = a.token_analysis || {};
+  var sm = a.session_summary || {};
+  var ts = a.tool_summary || {};
+  var cx = a.context_analysis || {};
+  var health = a.health_score;
+  var healthPct = health ? Math.round(health.overall * 100) : 100;
+  var healthColor = healthPct > 80 ? 'var(--accent-green)' : healthPct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
 
   document.getElementById('ana-header').innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:16px">' +
-    '<div><h2 style="margin:0">' + (a.task||'Untitled').substring(0,60) + '</h2>' +
-    '<p style="margin:4px 0;color:var(--text-secondary)">' + a.agent_type + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + ' · session: <code>' + id.substring(0,12) + '</code></p>' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:8px">' +
+    '<div><h2 style="margin:0;font-size:20px">' + escapeHtml((a.task||'Untitled').substring(0,80)) + '</h2>' +
+    '<p style="margin:4px 0;color:var(--text-secondary);font-size:13px"><strong>' + a.agent_type + '</strong> · ' + a.status + ' · ' + (a.duration_display||'?') + ' · <code style="font-size:11px">' + (id||'').substring(0,12) + '</code></p>' +
     '<p style="margin:4px 0;font-size:13px">' + (a.stop_analysis||'') + '</p></div>' +
-    '<div style="text-align:right;min-width:120px"><div style="font-size:42px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Health</div></div></div>';
+    '<div style="text-align:right;min-width:120px"><div style="font-size:42px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Health Score</div></div></div>';
 
   document.getElementById('ana-body').innerHTML =
-    // ── WHAT HAPPENED: Event Timeline ──
-    '<div class="card"><h3>📋 What Happened</h3>' +
-    '<div style="max-height:400px;overflow-y:auto">' + timelineHtml + '</div></div>' +
-
-    // ── COST & TOKENS ──
-    '<div class="card"><h3>💰 Cost & Tokens</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
-    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green);font-size:22px">$' + cost.toFixed(4) + '</div><div class="stat-label">Est. Cost</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Total Tokens</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(0) + '%</div><div class="stat-label">Cache Hit</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.model_family||'?') + '</div><div class="stat-label">Model</div></div>' +
+    // Cost + Token stats cards
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">' +
+    '<div class="stat-card" style="border-left:3px solid var(--accent-green)"><div class="stat-value" style="font-size:22px;color:var(--accent-green)">$' + (tk.effective_cost_usd||0).toFixed(4) + '</div><div class="stat-label">Cost' + (tk.is_estimated ? ' (est.)' : '') + '</div></div>' +
+    '<div class="stat-card" style="border-left:3px solid var(--accent-blue)"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Tokens (in:' + (tk.input_tokens||0).toLocaleString() + ' / out:' + (tk.output_tokens||0).toLocaleString() + ')</div></div>' +
+    '<div class="stat-card" style="border-left:3px solid var(--accent-purple)"><div class="stat-value" style="font-size:13px">' + (a.model_family||a.model||'?') + '</div><div class="stat-label">Model · ' + (a.model||'?') + '</div></div>' +
+    '<div class="stat-card" style="border-left:3px solid var(--accent-yellow)"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(0) + '%</div><div class="stat-label">Cache Hit · ' + (tk.data_source||'?') + '</div></div>' +
     '</div>' +
-    '<p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Input: ' + (tk.input_tokens||0).toLocaleString() + ' · Output: ' + (tk.output_tokens||0).toLocaleString() + ' · Cache read: ' + (tk.cache_read_tokens||0).toLocaleString() + ' · Gross: $' + (tk.gross_cost_usd||0).toFixed(4) + ' · Saved: $' + (tk.cache_savings_usd||0).toFixed(4) + '</p></div>' +
 
-    // ── TOOLS USED ──
-    '<div class="card"><h3>🛠️ Tools Used</h3>' +
-    (toolRows ? '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>%</th></tr></thead><tbody>' + toolRows + '</tbody></table>' : '<p style="color:var(--text-secondary)">No tools called</p>') + '</div>' +
+    // Pricing detail
+    '<div class="card" style="margin-bottom:12px"><div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">' +
+    '<span>📊 <strong>Pricing:</strong> ${:.2f}/1M in · ${:.2f}/1M out</span>'.replace('{:.2f}', (tk.input_price_per_1m||0).toFixed(2)).replace('{:.2f}', (tk.output_price_per_1m||0).toFixed(2)) +
+    '<span>📐 <strong>Tokens/event:</strong> ' + (tk.tokens_per_event||0).toFixed(0) + '</span>' +
+    '<span>📤 <strong>Output:Input ratio:</strong> ' + (tk.output_to_input_ratio||0).toFixed(2) + '</span>' +
+    '<span>💰 <strong>Gross:</strong> $' + (tk.gross_cost_usd||0).toFixed(4) + ' · <strong>Saved:</strong> $' + (tk.cache_savings_usd||0).toFixed(4) + '</span>' +
+    '</div></div>' +
 
-    // ── OBSERVATIONS (meaningful only) ──
-    '<div class="card"><h3>🔍 What Was Observed</h3>' + obsHtml + '</div>' +
+    // Summary grid
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.total_events||0) + '</div><div class="stat-label">Total Events</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (sm.user_prompts||0) + '</div><div class="stat-label">User Prompts</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (ts.total_calls||0) + '</div><div class="stat-label">Tool Calls (' + (ts.total_errors||0) + ' errors)</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.subagents_spawned||0) + '</div><div class="stat-label">Subagents</div></div>' +
+    '</div>' +
 
-    // ── ISSUES FOUND ──
-    '<div class="card"><h3>⚠ Issues Found</h3>' +
-    (detDetails.length > 0 ? detDetails.map(function(d) {
-      var sevColor = (d.severity||'').indexOf('Critical') >= 0 ? 'var(--accent-red)' : (d.severity||'').indexOf('Warning') >= 0 ? 'var(--accent-yellow)' : 'var(--accent-blue)';
-      return '<div style="margin:8px 0;padding:10px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid ' + sevColor + '">' +
+    // Tool breakdown
+    '<div class="card" style="margin-bottom:12px"><h3>🛠 Tool Usage</h3>' +
+    '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Error Rate</th><th>% of Total</th></tr></thead><tbody>' +
+    ((ts.by_tool||[]).map(function(t) {
+      return '<tr><td><strong>' + t.tool + '</strong></td><td>' + t.calls + '</td><td>' + (t.errors > 0 ? '<span style="color:var(--accent-red)">' + t.errors + '</span>' : '0') + '</td><td>' + (t.error_rate_pct||0).toFixed(0) + '%</td><td>' + (t.pct_of_total||0).toFixed(0) + '%</td></tr>';
+    }).join('') || '<tr><td colspan="5">No tools used</td></tr>') +
+    '</tbody></table></div>' +
+
+    // Health dimensions
+    '<div class="card" style="margin-bottom:12px"><h3>❤ Health Dimensions</h3>' +
+    '<p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">' + (a.health_verdict||'No health data') + '</p>' +
+    (health ? '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:12px">' +
+      ['token_efficiency','latency','cost','accuracy','orchestration','security','reliability','context_quality','compliance'].map(function(d) {
+        var val = (health.dimensions && health.dimensions[d]) ? health.dimensions[d] : 1.0;
+        var pct = Math.round(val * 100);
+        var c = pct > 80 ? 'var(--accent-green)' : pct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+        return '<div style="display:flex;justify-content:space-between;padding:4px 8px;background:var(--bg-secondary);border-radius:4px"><span>' + d.replace(/_/g,' ') + '</span><span style="color:' + c + ';font-weight:600">' + pct + '%</span></div>';
+      }).join('') + '</div>' : '<p style="color:var(--text-secondary)">No health data</p>') +
+    '</div>' +
+
+    // Context summary
+    '<div class="card" style="margin-bottom:12px"><h3>📐 Context Pressure</h3>' +
+    '<div style="display:flex;gap:24px;font-size:13px">' +
+    '<span>Readings: <strong>' + (cx.pressure_readings||0) + '</strong></span>' +
+    '<span>Average: <strong>' + (cx.avg_pressure_pct||0).toFixed(0) + '%</strong></span>' +
+    '<span>Peak: <strong style="color:' + ((cx.max_pressure_pct||0) > 85 ? 'var(--accent-red)' : 'var(--accent-yellow)') + '">' + (cx.max_pressure_pct||0).toFixed(0) + '%</strong></span>' +
+    '<span>Status: <strong>' + (cx.status||'healthy') + '</strong></span>' +
+    (cx.pressure_history && cx.pressure_history.length > 0 ? '<span>History: [' + cx.pressure_history.join('%, ') + '%]</span>' : '') +
+    '</div></div>' +
+
+    // Recommendations
+    '<div class="card" style="border-left:4px solid var(--accent-purple);margin-bottom:12px"><h3>🧠 Recommendations</h3>' +
+    ((a.recommendations||[]).length > 0 ? a.recommendations.map(function(r) { return '<div style="padding:4px 0">💡 ' + escapeHtml(r) + '</div>'; }).join('') : '<p style="color:var(--text-secondary)">No recommendations</p>') +
+    '</div>';
+}
+
+// ═══ TAB 2: TIMELINE ═══
+function renderAnaTimeline(a, id) {
+  var events = a.event_log || [];
+  document.getElementById('ana-header').innerHTML = '<h2 style="margin:0">📋 Event Timeline</h2><p style="color:var(--text-secondary)">' + events.length + ' events captured — every agent action in sequence</p>';
+
+  var typeColors = {
+    session_start: 'var(--accent-green)',
+    session_end: 'var(--accent-green)',
+    session_failed: 'var(--accent-red)',
+    tool_start: 'var(--accent-blue)',
+    tool_end: 'var(--accent-blue)',
+    user_prompt: 'var(--accent-purple)',
+    context_pressure: 'var(--accent-yellow)',
+    subagent_fork: 'var(--accent-yellow)',
+    token_usage: 'var(--accent-green)',
+    output: 'var(--text-secondary)',
+  };
+
+  document.getElementById('ana-body').innerHTML =
+    '<div class="card"><div style="max-height:600px;overflow-y:auto">' +
+    events.map(function(ev) {
+      var color = typeColors[ev.type] || 'var(--text-secondary)';
+      var time = (ev.time||'').substring(11,19) || '--:--:--';
+      var detailHtml = '';
+
+      if (ev.type === 'tool_end') {
+        detailHtml = '<div style="margin-top:4px;font-size:11px;color:var(--text-secondary)">' +
+          '<strong>' + (ev.tool||'?') + '</strong>' +
+          (ev.is_error ? ' <span style="color:var(--accent-red)">FAILED</span>' : ' <span style="color:var(--accent-green)">ok</span>') +
+          (ev.duration_ms > 0 ? ' · ' + ev.duration_ms + 'ms' : '') +
+          (ev.token_count > 0 ? ' · ' + ev.token_count + ' tokens' : '') +
+          (ev.result ? '<div style="margin-top:4px;padding:6px;background:var(--bg);border-radius:4px;font-family:monospace;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto">' + escapeHtml(ev.result) + '</div>' : '') +
+          '</div>';
+      } else if (ev.type === 'user_prompt') {
+        detailHtml = '<div style="margin-top:4px;font-size:12px;white-space:pre-wrap">' + escapeHtml(ev.text||'') + '</div>' +
+          '<div style="font-size:10px;color:var(--text-secondary)">' + (ev.text_len||0) + ' chars · ~' + (ev.estimated_tokens||0) + ' tokens</div>';
+      } else if (ev.type === 'tool_start') {
+        detailHtml = '<div style="margin-top:4px;font-size:12px"><strong>' + (ev.tool||'?') + '</strong>: ' + escapeHtml(ev.args_display||'') + '</div>';
+      } else if (ev.type === 'session_start') {
+        detailHtml = '<div style="margin-top:4px;font-size:12px">Task: ' + escapeHtml(ev.task||'') + '</div>';
+      } else if (ev.type === 'context_pressure') {
+        detailHtml = '<div style="margin-top:4px;font-size:12px">Pressure: <strong>' + (ev.pressure_pct||0) + '%</strong> · Trend: ' + (ev.trend||0).toFixed(2) + '</div>';
+      } else if (ev.type === 'token_usage') {
+        detailHtml = '<div style="margin-top:4px;font-size:11px">' +
+          'Input: ' + (ev.input_tokens||0).toLocaleString() + ' · Output: ' + (ev.output_tokens||0).toLocaleString() +
+          ' · Cache: ' + (ev.cache_read||0).toLocaleString() + ' · Model: ' + (ev.model||'?') +
+          '</div>';
+      } else if (ev.type === 'subagent_fork') {
+        detailHtml = '<div style="margin-top:4px;font-size:12px">Subagent: <strong>' + (ev.child||'?') + '</strong> — ' + escapeHtml(ev.task||'') + '</div>';
+      }
+
+      return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="color:var(--text-secondary);font-family:monospace;font-size:11px;min-width:60px;padding-top:2px">' + time + '</span>' +
+        '<span style="font-size:14px;min-width:20px;text-align:center">' + (ev.icon||'●') + '</span>' +
+        '<span style="color:' + color + ';font-size:11px;min-width:80px;font-weight:600;text-transform:uppercase;padding-top:2px">' + (ev.type||'?').replace(/_/g,' ') + '</span>' +
+        '<div style="flex:1">' + detailHtml + '</div>' +
+        '<span style="color:var(--text-secondary);font-size:10px;min-width:30px;text-align:right;padding-top:2px">#' + (ev.seq||'?') + '</span>' +
+        '</div>';
+    }).join('') +
+    '</div></div>';
+}
+
+// ═══ TAB 3: TOOLS & PROMPTS ═══
+function renderAnaToolsPrompts(a, id) {
+  var tools = a.tool_instances || [];
+  var prompts = a.prompt_instances || [];
+
+  document.getElementById('ana-header').innerHTML = '<h2 style="margin:0">🛠 Tools & Prompts</h2><p style="color:var(--text-secondary)">' + tools.length + ' tool calls · ' + prompts.length + ' prompts</p>';
+
+  var toolsHtml = '<div class="card" style="margin-bottom:12px"><h3>🛠 Every Tool Call</h3>' +
+    (tools.length > 0 ? tools.map(function(t) {
+      return '<div style="margin:8px 0;padding:10px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid ' + (t.is_error ? 'var(--accent-red)' : 'var(--accent-green)') + '">' +
         '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<strong>' + (d.category||'issue') + '</strong>' +
-        '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + sevColor + ';color:#000">' + (d.severity||'?') + ' · ' + ((d.confidence||0)*100).toFixed(0) + '%</span>' +
-        '</div><p style="margin:6px 0 0 0;font-size:12px;color:var(--text-secondary)">' + (d.description||'') + '</p></div>';
-    }).join('') : '<p style="color:var(--accent-green)">✅ No issues detected</p>') +
-    '<p style="font-size:12px;color:var(--text-secondary);margin-top:8px">Context: avg ' + (cx.avg_pressure_pct||0).toFixed(0) + '% / max ' + (cx.max_pressure_pct||0).toFixed(0) + '% · ' + (cx.compaction_events||0) + ' compactions</p></div>' +
+        '<strong>' + t.tool + '</strong>' +
+        '<span style="font-size:11px">' + (t.is_error ? '<span style="color:var(--accent-red)">FAILED</span>' : '<span style="color:var(--accent-green)">ok</span>') + ' · ' + (t.duration_ms||0) + 'ms · ' + (t.token_count||0) + ' tokens</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px"><strong>Args:</strong> ' + escapeHtml(t.args_display||'') + '</div>' +
+        (t.result ? '<div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:4px;font-family:monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:150px;overflow-y:auto">' + escapeHtml(t.result) + '</div>' : '') +
+        '</div>';
+    }).join('') : '<p style="color:var(--text-secondary)">No tool calls recorded</p>') +
+    '</div>';
 
-    // ── INTERVENTIONS ──
-    '<div class="card"><h3>🔧 Interventions</h3>' +
-    (intDetails.length > 0 ? intDetails.map(function(i) {
-      return '<div style="margin:6px 0;padding:8px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid var(--accent-blue)">' +
-        '<strong style="font-size:13px">' + (i.strategy||'intervention') + '</strong>' +
-        '<p style="margin:4px 0 0 0;font-size:12px;color:var(--text-secondary)">' + (i.action||'') + '</p></div>';
-    }).join('') : '<p style="color:var(--text-secondary)">No interventions needed</p>') + '</div>' +
+  var promptsHtml = '<div class="card"><h3>💬 Every Prompt</h3>' +
+    (prompts.length > 0 ? prompts.map(function(p) {
+      return '<div style="margin:8px 0;padding:10px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid var(--accent-purple)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+        '<strong>Prompt #' + p.index + '</strong>' +
+        '<span style="font-size:11px;color:var(--text-secondary)">~' + (p.estimated_input_tokens||0) + ' tokens · ' + (p.following_tool_calls||0) + ' tools after · ' + (p.first_response_latency_ms||0) + 'ms latency</span>' +
+        '</div>' +
+        '<div style="font-size:13px;line-height:1.5;white-space:pre-wrap">' + escapeHtml(p.text||'') + '</div>' +
+        (p.tools_after && p.tools_after.length > 0 ? '<div style="margin-top:6px;font-size:11px;color:var(--text-secondary)">Following tools: ' + p.tools_after.map(function(ft) { return ft.tool + (ft.is_error ? ' (FAILED)' : '') + ' ' + ft.duration_ms + 'ms'; }).join(', ') + '</div>' : '') +
+        '</div>';
+    }).join('') : '<p style="color:var(--text-secondary)">No prompts captured</p>') +
+    '</div>';
 
-    // ── RECOMMENDATIONS ──
-    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 What To Improve</h3>' + recsHtml + '</div>' +
+  document.getElementById('ana-body').innerHTML = toolsHtml + promptsHtml;
+}
 
-    '<div class="flex-row" style="margin-top:16px;gap:8px">' +
-    '<button onclick="showAnalysis(\'' + id + '\')">🔄 Refresh</button>' +
-    '<button onclick="generateReport(\'' + id + '\')" class="success">📥 Download Report</button>' +
-    '<button onclick="showPage(\'sessions\')">← Back</button></div>';
+// ═══ TAB 4: DETECTIONS ═══
+function renderAnaDetections(a, id) {
+  var dr = a.detector_report || {};
+  var dets = dr.by_category || [];
+  var ints = dr.interventions || [];
+  var strats = dr.strategies || [];
+
+  document.getElementById('ana-header').innerHTML = '<h2 style="margin:0">⚠ Detections & Interventions</h2><p style="color:var(--text-secondary)">' + (dr.total_detections||0) + ' detections · ' + (dr.total_interventions||0) + ' interventions · ' + (dr.total_strategies||0) + ' strategies</p>';
+
+  var detsHtml = '<div class="card" style="margin-bottom:12px"><h3>⚠ Detections by Category</h3>' +
+    (dets.length > 0 ? dets.map(function(cat) {
+      var sevColor = cat.severity === 'Critical' ? 'var(--accent-red)' : cat.severity === 'Error' ? 'var(--accent-red)' : cat.severity === 'Warning' ? 'var(--accent-yellow)' : 'var(--accent-blue)';
+      return '<div style="margin:10px 0;padding:12px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid ' + sevColor + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<strong style="font-size:14px">' + escapeHtml(cat.category||'?') + '</strong>' +
+        '<span style="font-size:11px;padding:3px 10px;border-radius:12px;background:' + sevColor + ';color:#000;font-weight:600">' + cat.severity + ' · ' + cat.count + 'x · ' + (cat.avg_confidence*100).toFixed(0) + '% conf</span>' +
+        '</div>' +
+        (cat.instances||[]).map(function(inst) {
+          return '<div style="margin-top:6px;font-size:12px;color:var(--text-secondary);padding:6px 10px;background:var(--bg);border-radius:4px">' + escapeHtml(inst.description||'') + '</div>';
+        }).join('') +
+        '</div>';
+    }).join('') : '<p style="color:var(--accent-green);font-size:14px">✅ No issues detected — agent is running clean</p>') +
+    '</div>';
+
+  var intsHtml = '<div class="card" style="margin-bottom:12px"><h3>🔧 Interventions Applied</h3>' +
+    (ints.length > 0 ? ints.map(function(i) {
+      return '<div style="margin:6px 0;padding:10px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid var(--accent-blue)">' +
+        '<strong>' + (i.strategy||'intervention') + '</strong>' +
+        '<p style="margin:4px 0 0 0;font-size:12px;color:var(--text-secondary)">' + escapeHtml(i.action||'') + '</p></div>';
+    }).join('') : '<p style="color:var(--text-secondary)">No interventions needed</p>') +
+    '</div>';
+
+  var stratsHtml = strats.length > 0 ? '<div class="card"><h3>📋 Strategy Evaluations</h3>' +
+    strats.map(function(s) {
+      return '<div style="margin:6px 0;padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:12px"><strong>' + (s.strategy||'?') + '</strong> → ' + escapeHtml(s.detection||'') + ': ' + escapeHtml(s.intervention||'') + '</div>';
+    }).join('') + '</div>' : '';
+
+  document.getElementById('ana-body').innerHTML = detsHtml + intsHtml + stratsHtml;
+}
+
+// ═══ TAB 5: HOOKS & CONTEXT ═══
+function renderAnaHooks(a, id) {
+  var hooks = a.hook_trace || [];
+  var cx = a.context_analysis || {};
+
+  document.getElementById('ana-header').innerHTML = '<h2 style="margin:0">🔗 Hook Trace & Context</h2><p style="color:var(--text-secondary)">' + hooks.length + ' hook types detected · ' + (cx.pressure_readings||0) + ' context readings</p>';
+
+  var hooksHtml = '<div class="card" style="margin-bottom:12px"><h3>🔗 Hook Events by Type</h3>' +
+    (hooks.length > 0 ? hooks.map(function(h) {
+      return '<div style="margin:8px 0;padding:10px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid var(--accent-blue)">' +
+        '<strong>' + h.hook + '</strong> <span style="color:var(--text-secondary);font-size:12px">— ' + (h.description||'') + '</span>' +
+        '<span style="float:right;font-size:13px;font-weight:600;color:var(--accent-blue)">' + h.count + ' event(s)</span>' +
+        '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);max-height:200px;overflow-y:auto">' +
+        (h.events||[]).slice(0, 10).map(function(ev) {
+          var detail = ev.tool||ev.detail||ev.text||ev.task||'';
+          if (typeof detail === 'object') detail = JSON.stringify(detail);
+          detail = String(detail).substring(0, 120);
+          return '<div style="padding:2px 0;border-bottom:1px solid var(--border)">#' + (ev.seq||'?') + ' ' + escapeHtml(detail) + '</div>';
+        }).join('') +
+        ((h.events||[]).length > 10 ? '<div style="padding:2px 0;color:var(--text-secondary)">... and ' + ((h.events||[]).length - 10) + ' more</div>' : '') +
+        '</div></div>';
+    }).join('') : '<p style="color:var(--text-secondary)">No hooks traced yet</p>') +
+    '</div>';
+
+  var ctxHtml = '<div class="card"><h3>📐 Context Pressure Analysis</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">' +
+    '<div class="stat-card"><div class="stat-value">' + (cx.pressure_readings||0) + '</div><div class="stat-label">Readings</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:' + ((cx.avg_pressure_pct||0) > 75 ? 'var(--accent-red)' : 'var(--accent-yellow)') + '">' + (cx.avg_pressure_pct||0).toFixed(0) + '%</div><div class="stat-label">Average Pressure</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:' + ((cx.max_pressure_pct||0) > 85 ? 'var(--accent-red)' : '') + '">' + (cx.max_pressure_pct||0).toFixed(0) + '%</div><div class="stat-label">Peak Pressure</div></div>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary)">Status: <strong style="color:' + (cx.status === 'critical' ? 'var(--accent-red)' : cx.status === 'warning' ? 'var(--accent-yellow)' : 'var(--accent-green)') + '">' + (cx.status||'healthy') + '</strong></div>' +
+    (cx.pressure_history && cx.pressure_history.length > 0 ?
+      '<div style="margin-top:8px"><strong style="font-size:12px">Pressure History:</strong>' +
+      '<div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">' +
+      cx.pressure_history.map(function(p) {
+        var c = p > 85 ? 'var(--accent-red)' : p > 60 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+        return '<div style="padding:4px 10px;background:' + c + '22;border:1px solid ' + c + ';border-radius:4px;font-size:11px;font-family:monospace">' + p + '%</div>';
+      }).join('') + '</div></div>' : '') +
+    '</div>';
+
+  document.getElementById('ana-body').innerHTML = hooksHtml + ctxHtml;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // Build event timeline from raw session data
@@ -403,10 +592,19 @@ function renderMeta() {
 
 function generateReport(id) {
   api('/v1/sessions/' + id + '/analysis').then(function(a) {
+    var tk = a.token_analysis || {};
     var report = '# Forge Harness Report\n\n';
     report += '**Session:** ' + (a.task||'Untitled') + '\n';
-    report += '**Agent:** ' + a.agent_type + ' | **Status:** ' + a.status + ' | **Duration:** ' + formatDuration(a.duration_secs||0) + '\n\n';
-    report += '## Token Analysis\n- Total: ' + (a.token_analysis?.total_tokens||0).toLocaleString() + '\n- Est. Cost: $' + (a.token_analysis?.estimated_cost_usd||0).toFixed(5) + '\n- Model: ' + (a.token_analysis?.model_family||'?') + '\n\n';
+    report += '**Agent:** ' + a.agent_type + ' | **Status:** ' + a.status + ' | **Duration:** ' + formatDuration(a.duration_secs||0) + '\n';
+    report += '**Model:** ' + (a.model||tk.model_family||'?') + (tk.is_estimated ? ' (auto-detected)' : '') + '\n\n';
+    report += '## Token Analysis\n- Total: ' + (tk.total_tokens||0).toLocaleString() + ' (input: ' + (tk.input_tokens||0).toLocaleString() + ', output: ' + (tk.output_tokens||0).toLocaleString() + ')\n';
+    report += '- Est. Cost: $' + (tk.estimated_cost_usd||0).toFixed(5) + '\n';
+    report += '- Data Source: ' + (tk.data_source||'unknown') + '\n';
+    report += '- Cache: ' + (tk.cache_hit_pct||0).toFixed(0) + '% hit rate\n\n';
+    report += '## Prompt History\n';
+    if (a.prompt_history && a.prompt_history.length > 0) {
+      a.prompt_history.forEach(function(p) { report += '### Prompt #' + p.index + ' (~' + (p.estimated_tokens||0) + ' tokens)\n' + p.text + '\n\n'; });
+    } else { report += 'No prompts captured\n\n'; }
     report += '## Detections\n';
     (a.detection_details||[]).forEach(function(d) { report += '- **' + d.category + '** [' + d.severity + '] ' + (d.confidence*100).toFixed(0) + '%: ' + d.description + '\n'; });
     if (!a.detection_details?.length) report += 'No issues detected\n';

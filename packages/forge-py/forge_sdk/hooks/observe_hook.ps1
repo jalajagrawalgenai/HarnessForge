@@ -28,6 +28,15 @@ $flags = @{}
 if ($data.hook_event_name -eq "SessionStart") { $flags.startsSession = $true; $flags.clearsNotification = $true }
 if ($data.hook_event_name -eq "SessionEnd" -or $data.hook_event_name -eq "Stop") { $flags.stopsSession = $true }
 
+# Inject model from environment if missing from payload
+if (-not $data.model) {
+    $envModel = $env:CLAUDE_MODEL
+    if (-not $envModel) { $envModel = $env:ANTHROPIC_MODEL }
+    if (-not $envModel) { $envModel = $env:ANTHROPIC_DEFAULT_MODEL }
+    if (-not $envModel) { $envModel = $env:OPENAI_MODEL }
+    if ($envModel) { $data | Add-Member -NotePropertyName "model" -NotePropertyValue $envModel -Force }
+}
+
 $envelope = @{
     agentClass = "claude-code"
     sessionId = if ($data.session_id) { $data.session_id } else { "unknown" }

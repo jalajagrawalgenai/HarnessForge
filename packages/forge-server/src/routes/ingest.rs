@@ -76,13 +76,24 @@ async fn run_pipeline_cycle(
         if let Some(s) = sessions.get_mut(session_id) {
             let _ = s.event_broadcaster.send(event.clone());
             s.events.push(event.clone());
+            s.event_hooks.push(hook_name.to_string());
             if s.events.len() > 1000 {
                 s.events.remove(0);
+                s.event_hooks.remove(0);
             }
             s.event_count += 1;
             for obs in &new_observations {
                 s.observations.push(obs.clone());
-                if s.observations.len() > 200 {
+                if s.observations.len() > 500 {
+                    s.observations.remove(0);
+                }
+            }
+            // ALSO inject flattened event data into observations so detectors can access
+            // ALL event fields (tool_name, content, file_path, etc.) directly.
+            // Observers produce computed metrics — this provides the raw event context.
+            if let Some(flat) = event_to_observation(event) {
+                s.observations.push(flat);
+                if s.observations.len() > 500 {
                     s.observations.remove(0);
                 }
             }
@@ -119,19 +130,33 @@ async fn run_pipeline_cycle(
                     "confidence": issue.confidence,
                     "description": issue.description,
                 }));
+                // Try ALL strategies, collect results, pick the BEST (highest priority)
+                let mut best_strategy: Option<(u32, Value, Value)> = None;
                 for strategy in registry.strategies() {
                     if let Some(result) = strategy.evaluate(issue).await {
-                        new_strategies.push(json!({
+                        let priority = result.priority;
+                        let s_json = json!({
                             "strategy": strategy.name(),
                             "detection": issue.category_name(),
                             "intervention": format!("{:?}", result.intervention),
-                        }));
-                        new_interventions.push(json!({
+                            "priority": priority,
+                            "reasoning": result.reasoning,
+                        });
+                        let i_json = json!({
                             "strategy": strategy.name(),
                             "action": format!("{:?}", result.intervention),
-                        }));
-                        break;
+                            "priority": priority,
+                        });
+                        match best_strategy {
+                            None => best_strategy = Some((priority, s_json, i_json)),
+                            Some((p, _, _)) if priority > p => best_strategy = Some((priority, s_json, i_json)),
+                            _ => {}
+                        }
                     }
+                }
+                if let Some((_, s_json, i_json)) = best_strategy {
+                    new_strategies.push(s_json);
+                    new_interventions.push(i_json);
                 }
             }
         }
@@ -239,6 +264,32 @@ async fn run_pipeline_cycle(
             match hook_name {
                 "UserPromptSubmit" => {
                     s.user_prompt_count += 1;
+                    // Capture the user's prompt text for audit trail
+                    if let Some(prompt) = payload.get("prompt").and_then(|v| v.as_str()) {
+                        if !prompt.is_empty() {
+                            s.prompt_history.push(prompt.to_string());
+                            if s.prompt_history.len() > 50 {
+                                s.prompt_history.remove(0);
+                            }
+                        }
+                    }
+                }
+                "SessionStart" => {
+                    // Extract model from SessionStart payload
+                    if s.model_name.is_none() {
+                        if let Some(model) = payload.get("model").and_then(|v| v.as_str()) {
+                            if !model.is_empty() && model != "unknown" {
+                                s.model_name = Some(model.to_string());
+                            }
+                        }
+                    }
+                    // Set task from initial prompt (but do NOT push to prompt_history —
+                    // UserPromptSubmit handles that to avoid duplicate entries)
+                    if let Some(prompt) = payload.get("prompt").and_then(|v| v.as_str()) {
+                        if !prompt.is_empty() && s.task == "(live agent session)" {
+                            s.task = prompt.to_string();
+                        }
+                    }
                 }
                 "PostToolUse" => {
                     let tool = payload
@@ -500,8 +551,8 @@ pub async fn ingest_event(
                 }
             }
 
-            // 2. Direct event-based detection (works on raw event patterns)
-            let (direct_detections, direct_strategies, direct_interventions) = {
+            // 2. Direct event-based detection (sync — no strategy evaluation)
+            let (direct_detections, direct_strategies_from_ev, direct_interventions_from_ev) = {
                 let sessions = state.store.read().await;
                 if let Some(s) = sessions.get(session_id) {
                     detect_from_events(s, &registry)
@@ -510,15 +561,29 @@ pub async fn ingest_event(
                 }
             };
             new_detections.extend(direct_detections);
-            new_strategies.extend(direct_strategies);
-            new_interventions.extend(direct_interventions);
-
+            new_strategies.extend(direct_strategies_from_ev);
+            new_interventions.extend(direct_interventions_from_ev);
             // Store detections, strategies, and interventions (as JSON for API)
             {
                 let mut sessions = state.store.write().await;
                 if let Some(s) = sessions.get_mut(session_id) {
                     for d in &new_detections {
                         s.detections.push(d.clone());
+                        // Track categories to prevent duplicates
+                        if let Some(cat) = d.get("category").and_then(|c| c.as_str()) {
+                            s.reported_categories.insert(cat.to_string());
+                        }
+                        // Track loop detections per tool to prevent duplicates
+                        if d.get("category").and_then(|c| c.as_str()) == Some("loop") {
+                            if let Some(desc) = d.get("description").and_then(|c| c.as_str()) {
+                                // Extract tool name from description: "Loop detected: 'Bash' called..."
+                                if let Some(start) = desc.find('\'') {
+                                    if let Some(end) = desc[start+1..].find('\'') {
+                                        s.loop_detected_tools.insert(desc[start+1..start+1+end].to_string());
+                                    }
+                                }
+                            }
+                        }
                     }
                     for strat in &new_strategies {
                         s.strategy_results.push(strat.clone());
@@ -615,6 +680,22 @@ pub async fn ingest_event(
                     .and_then(|v| v.as_str())
                     .map(String::from)
                     .or_else(|| Some(format!("Session ended via {}", hook_name)));
+                // Auto-detect model from environment if still unknown
+                if s.model_name.is_none() {
+                    s.model_name = detect_model_from_env();
+                }
+                // Estimate tokens if no transcript data was received
+                if s.total_input_tokens == 0 && s.total_output_tokens == 0 {
+                    let (est_in, est_out) = estimate_tokens(s);
+                    s.total_input_tokens = est_in;
+                    s.total_output_tokens = est_out;
+                    s.stop_reason = Some(format!(
+                        "{} (tokens estimated from {} events, {} tool calls)",
+                        s.stop_reason.as_deref().unwrap_or("Session ended"),
+                        s.event_count,
+                        s.tool_counts.values().sum::<u64>()
+                    ));
+                }
             }
             if hook_name == "StopFailure" {
                 s.status = SessionStatus::Failed;
@@ -634,6 +715,32 @@ pub async fn ingest_event(
             match hook_name {
                 "UserPromptSubmit" => {
                     s.user_prompt_count += 1;
+                    // Capture the user's prompt text for audit trail
+                    if let Some(prompt) = payload.get("prompt").and_then(|v| v.as_str()) {
+                        if !prompt.is_empty() {
+                            s.prompt_history.push(prompt.to_string());
+                            if s.prompt_history.len() > 50 {
+                                s.prompt_history.remove(0);
+                            }
+                        }
+                    }
+                }
+                "SessionStart" => {
+                    // Extract model from SessionStart payload
+                    if s.model_name.is_none() {
+                        if let Some(model) = payload.get("model").and_then(|v| v.as_str()) {
+                            if !model.is_empty() && model != "unknown" {
+                                s.model_name = Some(model.to_string());
+                            }
+                        }
+                    }
+                    // Set task from initial prompt (but do NOT push to prompt_history —
+                    // UserPromptSubmit handles that to avoid duplicate entries)
+                    if let Some(prompt) = payload.get("prompt").and_then(|v| v.as_str()) {
+                        if !prompt.is_empty() && s.task == "(live agent session)" {
+                            s.task = prompt.to_string();
+                        }
+                    }
                 }
                 "PostToolUse" => {
                     let tool = if tool_name.is_empty() {
@@ -797,8 +904,10 @@ pub async fn ingest_transcript(
                     timestamp: Utc::now(),
                 };
                 s.events.push(token_event.clone());
+                s.event_hooks.push("Transcript".to_string());
                 if s.events.len() > 1000 {
                     s.events.remove(0);
+                    s.event_hooks.remove(0);
                 }
                 let _ = s.event_broadcaster.send(token_event);
             }
@@ -1028,6 +1137,158 @@ pub async fn ingest_status(State(state): State<Arc<AppState>>) -> Json<Value> {
 
 // ── Helpers ──
 
+/// Auto-detect the model name from environment variables or hook metadata.
+/// Called when `model_name` is still None after processing events.
+fn detect_model_from_env() -> Option<String> {
+    // Check common environment variables for LLM model info
+    for var in &[
+        "CLAUDE_MODEL",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_DEFAULT_MODEL",
+        "OPENAI_MODEL",
+        "DEEPSEEK_MODEL",
+    ] {
+        if let Ok(val) = std::env::var(var) {
+            if !val.is_empty() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+/// Estimate token count from session data when no real transcript is available.
+/// Uses heuristics: tool calls, prompt lengths, event counts.
+fn estimate_tokens(s: &SessionState) -> (u64, u64) {
+    // Base estimate: each tool call costs ~800 tokens (input+output)
+    let total_tool_calls: u64 = s.tool_counts.values().sum();
+    let mut est_input = total_tool_calls * 500; // tool definitions + context
+    let mut est_output = total_tool_calls * 300; // tool results + reasoning
+
+    // Each user prompt contributes tokens
+    for prompt in &s.prompt_history {
+        // Rough: 1 token per 4 chars
+        est_input += (prompt.len() as u64 / 4).max(20);
+    }
+
+    // Each event adds context overhead
+    est_input += s.event_count * 50;
+
+    // Context pressure events suggest large context windows
+    if !s.context_pressure_history.is_empty() {
+        let avg_pressure = s.context_pressure_history.iter().sum::<f64>()
+            / s.context_pressure_history.len() as f64;
+        // High pressure suggests large context
+        est_input += (avg_pressure * 100_000.0) as u64;
+    }
+
+    // Minimum estimates
+    est_input = est_input.max(100);
+    est_output = est_output.max(50);
+
+    (est_input, est_output)
+}
+
+/// Map a detection category string to the proper IssueCategory enum variant.
+/// This allows strategies to match on category-specific variants.
+fn detection_category_from_str(
+    cat: &str,
+    desc: &str,
+) -> forge_sdk::types::detection::IssueCategory {
+    match cat {
+        "loop" => forge_sdk::types::detection::IssueCategory::LoopDetected {
+            tool_name: desc.to_string(),
+            call_count: 4,
+            no_progress_turns: 4,
+        },
+        "stale_context" => forge_sdk::types::detection::IssueCategory::StaleContext {
+            file_path: desc.to_string(),
+            read_count: 1,
+            context_pressure: 0.9,
+        },
+        "cost_anomaly" => {
+            forge_sdk::types::detection::IssueCategory::CostAnomaly {
+                expected_cost: 0.01,
+                actual_cost: 0.05,
+                multiplier: 5.0,
+            }
+        }
+        "runaway_cost" => {
+            forge_sdk::types::detection::IssueCategory::RunawayCost { acceleration: 2.0 }
+        }
+        "secret_leak" => {
+            forge_sdk::types::detection::IssueCategory::SecretLeak {
+                secret_type: desc.to_string(),
+            }
+        }
+        "accuracy_risk" => {
+            forge_sdk::types::detection::IssueCategory::AccuracyRisk {
+                risk_factors: vec![desc.to_string()],
+            }
+        }
+        "compliance_gap" => {
+            forge_sdk::types::detection::IssueCategory::ComplianceGap {
+                gap_type: desc.to_string(),
+            }
+        }
+        "variety_collapse" => {
+            forge_sdk::types::detection::IssueCategory::VarietyCollapse {
+                similarity_score: 0.95,
+                agent_count: 1,
+            }
+        }
+        "model_mismatch" => {
+            forge_sdk::types::detection::IssueCategory::ModelMismatch {
+                task_complexity: "high".into(),
+                model_used: "unknown".into(),
+                suggested_model: "claude-sonnet-4-6".into(),
+            }
+        }
+        "deadlock" => {
+            forge_sdk::types::detection::IssueCategory::Deadlock {
+                agents: vec!["unknown".into()],
+                wait_duration_secs: 60,
+            }
+        }
+        "conversation_stall" => {
+            forge_sdk::types::detection::IssueCategory::ConversationStall {
+                duration_secs: 60,
+            }
+        }
+        "goal_drift" => {
+            forge_sdk::types::detection::IssueCategory::GoalDrift {
+                similarity_to_original: 0.3,
+            }
+        }
+        "hallucination" => {
+            forge_sdk::types::detection::IssueCategory::Hallucination {
+                reference: desc.to_string(),
+                reference_type: "file".into(),
+            }
+        }
+        "prompt_injection" => {
+            forge_sdk::types::detection::IssueCategory::PromptInjection {
+                pattern_matched: desc.to_string(),
+            }
+        }
+        "resource_exhaustion" => {
+            forge_sdk::types::detection::IssueCategory::ResourceExhaustion {
+                resource: desc.to_string(),
+                usage_pct: 95.0,
+            }
+        }
+        "output_degradation" => {
+            forge_sdk::types::detection::IssueCategory::OutputDegradation {
+                trend_slope: -0.5,
+                consecutive_declines: 3,
+            }
+        }
+        _ => forge_sdk::types::detection::IssueCategory::AccuracyRisk {
+            risk_factors: vec![format!("{}: {}", cat, desc)],
+        },
+    }
+}
+
 /// Map an agent class string (from hook envelope) to our AgentType string.
 fn map_agent_class(ac: &str) -> String {
     match ac.to_lowercase().as_str() {
@@ -1114,65 +1375,89 @@ fn detect_from_events(
     };
 
     // ── LOOP DETECTION: same tool 3+ times consecutively ──
+    // Uses loop_detected_tools HashSet to ensure each tool is only reported ONCE per session.
     let mut last_tool = String::new();
     let mut repeat_count = 0u32;
-    for ev in &s.events {
-        let tool = serde_json::to_value(ev)
-            .ok()
-            .and_then(|v| v.get("tool").cloned())
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_default();
+    let mut loop_start_event = 0u64;
+    for (i, ev) in s.events.iter().enumerate() {
+        let tool = match ev {
+            AgentEvent::ToolCallStart { tool, .. } | AgentEvent::ToolCallEnd { tool, .. } => {
+                tool.clone()
+            }
+            _ => String::new(),
+        };
         if !tool.is_empty() && tool == last_tool {
+            if repeat_count == 0 {
+                loop_start_event = i as u64;
+            }
             repeat_count += 1;
         } else {
-            if repeat_count >= 3 && !is_dup("loop", &format!("loop-{}-{}", last_tool, repeat_count))
-            {
+            if repeat_count >= 3 && !s.loop_detected_tools.contains(&last_tool) {
                 detections.push(json!({
                     "category": "loop",
                     "severity": "Warning",
                     "confidence": 0.85,
-                    "description": format!("Loop: '{}' called {} times consecutively (events #{}-#{}) — agent stuck retrying same tool. Try a different approach.", last_tool, repeat_count + 1, s.event_count - repeat_count as u64, s.event_count),
+                    "description": format!(
+                        "Loop detected: '{}' called {} times consecutively (events #{}-#{}) — agent may be stuck retrying the same action. Check if the tool result is being ignored or the agent is falling into a repetitive pattern.",
+                        last_tool, repeat_count + 1, loop_start_event + 1, i
+                    ),
                 }));
             }
             last_tool = tool;
             repeat_count = 0;
         }
     }
+    // Check the last sequence too
+    if repeat_count >= 3 && !s.loop_detected_tools.contains(&last_tool) {
+        detections.push(json!({
+            "category": "loop",
+            "severity": "Warning",
+            "confidence": 0.85,
+            "description": format!(
+                "Loop detected: '{}' called {} times consecutively (events #{}-#{}) — agent may be stuck retrying the same action.",
+                last_tool, repeat_count + 1, loop_start_event + 1, s.events.len()
+            ),
+        }));
+    }
 
     // ── CONTEXT PRESSURE: check if context is critically high ──
-    if let Some(&last_pressure) = s.context_pressure_history.last() {
-        if last_pressure > 0.85 {
-            detections.push(json!({
-                "category": "stale_context",
-                "severity": if last_pressure > 0.95 { "Critical" } else { "Warning" },
-                "confidence": last_pressure,
-                "description": format!("Context pressure at {:.0}% — agent may be losing track of earlier context. Consider compacting or starting fresh.", last_pressure * 100.0),
-            }));
-            strategies.push(json!({
-                "strategy": "compact",
-                "detection": "stale_context",
-                "intervention": format!("Compact: reduce context from {:.0}% to target 60%", last_pressure * 100.0),
-            }));
+    if !s.reported_categories.contains("stale_context") {
+        if let Some(&last_pressure) = s.context_pressure_history.last() {
+            if last_pressure > 0.85 {
+                detections.push(json!({
+                    "category": "stale_context",
+                    "severity": if last_pressure > 0.95 { "Critical" } else { "Warning" },
+                    "confidence": last_pressure,
+                    "description": format!("Context pressure at {:.0}% — agent may be losing track of earlier context. Consider compacting or starting fresh.", last_pressure * 100.0),
+                }));
+                strategies.push(json!({
+                    "strategy": "compact",
+                    "detection": "stale_context",
+                    "intervention": format!("Compact: reduce context from {:.0}% to target 60%", last_pressure * 100.0),
+                }));
+            }
         }
     }
 
-    // ── TOOL ERRORS: check error rate ──
-    let total: u64 = s.tool_counts.values().sum();
-    let errors: u64 = s.tool_errors.values().sum();
-    if total > 0 && errors > 0 {
-        let error_rate = errors as f64 / total as f64;
-        if error_rate > 0.2 {
-            detections.push(json!({
-                "category": "accuracy_risk",
-                "severity": "Error",
-                "confidence": error_rate,
-                "description": format!("High tool error rate: {}/{} calls failed ({:.0}%). Review tool definitions and permissions.", errors, total, error_rate * 100.0),
-            }));
+    // ── TOOL ERRORS: check error rate (report once per session) ──
+    if !s.reported_categories.contains("accuracy_risk") {
+        let total: u64 = s.tool_counts.values().sum();
+        let errors: u64 = s.tool_errors.values().sum();
+        if total > 0 && errors > 0 {
+            let error_rate = errors as f64 / total as f64;
+            if error_rate > 0.2 {
+                detections.push(json!({
+                    "category": "accuracy_risk",
+                    "severity": "Error",
+                    "confidence": error_rate,
+                    "description": format!("High tool error rate: {}/{} calls failed ({:.0}%). Review tool definitions and permissions.", errors, total, error_rate * 100.0),
+                }));
+            }
         }
     }
 
-    // ── COST ANOMALY: check if token usage per event is spiking ──
-    if s.event_count > 5 {
+    // ── COST ANOMALY: check if token usage per event is spiking (report once) ──
+    if !s.reported_categories.contains("cost_anomaly") && s.event_count > 5 {
         let avg_tokens_per_event =
             (s.total_input_tokens + s.total_output_tokens) as f64 / s.event_count as f64;
         if avg_tokens_per_event > 5000.0 {
@@ -1185,38 +1470,49 @@ fn detect_from_events(
         }
     }
 
-    // ── RUN STRATEGIES on direct detections ──
+    // ── MAP STRATEGIES to direct detections (simple category matching) ──
+    // Formal async strategies run in the main pipeline; here we just tag detections.
+    let strategy_map: &[(&str, &str)] = &[
+        ("loop", "nudge"),
+        ("stale_context", "compact"),
+        ("accuracy_risk", "nudge"),
+        ("cost_anomaly", "nudge"),
+        ("secret_leak", "circuit_break"),
+        ("compliance_gap", "quarantine"),
+    ];
     for det in &detections {
         let cat = det["category"].as_str().unwrap_or("");
         let desc = det["description"].as_str().unwrap_or("");
-        for strategy in registry.strategies() {
-            let matches = match (cat, strategy.name()) {
-                ("loop", "nudge") => true,
-                ("stale_context", "compact") => true,
-                ("accuracy_risk", "nudge") => true,
-                ("cost_anomaly", "nudge") => true,
-                _ => false,
-            };
-            if matches {
-                interventions.push(json!({
-                    "strategy": strategy.name(),
-                    "action": desc,
-                }));
-                break;
-            }
-        }
+        let strategy_name = strategy_map.iter()
+            .find(|(c, _)| *c == cat)
+            .map(|(_, s)| *s)
+            .unwrap_or("nudge");
+        interventions.push(json!({
+            "strategy": strategy_name,
+            "action": desc,
+        }));
     }
 
     // ── SECRET LEAK: scan tool content for secrets ──
     let secret_patterns = [
+        // Only match credential patterns in suspicious contexts (assignments, configs, etc.)
+        // to avoid false positives from variable names in source code
         ("sk-", "OpenAI API key"),
-        ("api_key", "API key"),
-        ("Bearer", "Bearer token"),
-        ("password", "Password in output"),
-        ("-----BEGIN", "Private key"),
+        ("api_key=", "API key assignment"),
+        ("api_key:", "API key in config"),
+        ("Bearer ", "Bearer token in header"),
+        ("password=", "Password assignment"),
+        ("password:", "Password in config"),
+        ("passwd=", "Password in config"),
+        ("-----BEGIN RSA PRIVATE KEY", "Private key"),
+        ("-----BEGIN OPENSSH PRIVATE KEY", "SSH private key"),
         ("ghp_", "GitHub PAT"),
-        ("xox[baprs]-", "Slack token"),
+        ("xoxb-", "Slack bot token"),
+        ("xoxp-", "Slack user token"),
         ("AKIA", "AWS access key"),
+        ("secret_key=", "Secret key assignment"),
+        ("secret_key:", "Secret key in config"),
+        ("access_token=", "Access token in output"),
     ];
     for ev in s.events.iter().rev().take(20) {
         if let Ok(v) = serde_json::to_value(ev) {
@@ -1303,6 +1599,97 @@ fn compute_health_dimensions(observations: &[Value]) -> forge_sdk::types::health
     dims
 }
 
+/// Flatten an AgentEvent into a JSON observation with ALL fields that
+/// downstream detectors expect. This bridges the gap between observer output
+/// (computed metrics) and detector input (raw event context).
+fn event_to_observation(event: &AgentEvent) -> Option<Value> {
+    match event {
+        AgentEvent::ToolCallStart { tool, args, timestamp, .. } => {
+            let file_path = args.get("file_path").and_then(|v| v.as_str());
+            let command = args.get("command").and_then(|v| v.as_str());
+            Some(json!({
+                "tool_name": tool,
+                "tool": tool,
+                "file_path": file_path,
+                "file_reference": file_path,
+                "command": command,
+                "content": command.unwrap_or(""),
+                "msg_timestamp_ms": timestamp.timestamp_millis(),
+                "resource": "tool_call",
+                "usage_pct": 0.0,
+            }))
+        }
+        AgentEvent::ToolCallEnd { tool, result, timestamp, .. } => Some(json!({
+            "tool_name": tool,
+            "tool": tool,
+            "content": result.content,
+            "output": result.content,
+            "quality_score": if result.is_error { 0.3 } else { 0.9 },
+            "msg_timestamp_ms": timestamp.timestamp_millis(),
+            "cost_per_turn": result.token_count as f64 * 0.000003,  // rough estimate
+        })),
+        AgentEvent::MessageSent { from, content, timestamp, .. } => {
+            let text = match content {
+                forge_sdk::events::MessageContent::Text(t) => t.clone(),
+                _ => return None,
+            };
+            Some(json!({
+                "content": text,
+                "original_task": text,
+                "current_output": text,
+                "agent_output": text,
+                "msg_timestamp_ms": timestamp.timestamp_millis(),
+            }))
+        }
+        AgentEvent::ContextPressure { current_ratio, timestamp, .. } => Some(json!({
+            "context_pressure": current_ratio,
+            "context_ratio": current_ratio,
+            "usage_pct": current_ratio * 100.0,
+            "resource": "context_window",
+            "msg_timestamp_ms": timestamp.timestamp_millis(),
+        })),
+        AgentEvent::TokenUsage { model, input, output, timestamp, .. } => Some(json!({
+            "model": model,
+            "task": format!("{} tokens used", input + output),
+            "msg_timestamp_ms": timestamp.timestamp_millis(),
+            "cost_per_turn": (*input as f64 * 3.0 + *output as f64 * 15.0) / 1_000_000.0,
+            "quality_score": if *output > 0 { 0.8 } else { 0.5 },
+        })),
+        AgentEvent::Forked { child_id, task, timestamp, .. } => Some(json!({
+            "waiting_agent": child_id,
+            "waiting_for": task,
+            "wait_duration_secs": 0u64,
+            "msg_timestamp_ms": timestamp.timestamp_millis(),
+            "resource": "subagent",
+        })),
+        AgentEvent::OutputDelta { text, timestamp, .. } => {
+            if text.is_empty() { return None; }
+            Some(json!({
+                "agent_output": text,
+                "content": text,
+                "current_output": text,
+                "msg_timestamp_ms": timestamp.timestamp_millis(),
+                "quality_score": 0.7,
+            }))
+        }
+        AgentEvent::Started { task, .. } => Some(json!({
+            "original_task": task,
+            "task": task,
+            "content": task,
+        })),
+        AgentEvent::Completed { summary, .. } => Some(json!({
+            "compliance_gap": if summary.contains("error") { "Errors in session" } else { "" },
+            "current_output": summary,
+        })),
+        AgentEvent::Failed { error, .. } => Some(json!({
+            "compliance_gap": error,
+            "current_output": error,
+            "quality_score": 0.0,
+        })),
+        _ => None,
+    }
+}
+
 /// Convert a Claude Code / agentic hook event into a harness AgentEvent.
 fn hook_to_agent_event(
     hook_name: &str,
@@ -1370,33 +1757,37 @@ fn hook_to_agent_event(
             })
         }
         "PostToolUse" => {
-            // Extract tool result from Claude Code's hook payload
+            // Extract tool result and args from Claude Code's hook payload
             let tool_response = payload.get("tool_response");
-            let content = tool_response.and_then(|v| v.as_str()).unwrap_or("");
-            // If content is empty, try to describe what was done
-            let content = if content.is_empty() {
-                let ti = payload.get("tool_input").cloned().unwrap_or(json!({}));
-                match tool_name {
-                    "Write" | "Edit" => {
-                        let path = ti.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
-                        format!("Modified {}", path)
-                    }
-                    "Read" => {
-                        let path = ti.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
-                        format!("Read {}", path)
-                    }
-                    "Bash" | "PowerShell" => {
-                        let cmd = ti.get("command").and_then(|v| v.as_str()).unwrap_or("");
-                        format!("Ran: {}", if cmd.len() > 60 { &cmd[..60] } else { cmd })
-                    }
-                    "Grep" => {
-                        let pattern = ti.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
-                        format!("Searched: {}", pattern)
-                    }
-                    _ => format!("{} completed", tool_name),
+            let raw_content = tool_response.and_then(|v| v.as_str()).unwrap_or("");
+            let ti = payload.get("tool_input").cloned().unwrap_or(json!({}));
+
+            // Build synthetic description from tool_input (shows what was requested)
+            let synthetic = match tool_name {
+                "Write" | "Edit" => {
+                    let path = ti.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+                    format!("Modified {}", path)
                 }
+                "Read" => {
+                    let path = ti.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+                    format!("Read {}", path)
+                }
+                "Bash" | "PowerShell" => {
+                    let cmd = ti.get("command").and_then(|v| v.as_str()).unwrap_or("");
+                    format!("Command: {}", if cmd.len() > 100 { &cmd[..100] } else { cmd })
+                }
+                "Grep" => {
+                    let pattern = ti.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+                    format!("Searched: {}", pattern)
+                }
+                _ => format!("{} called", tool_name),
+            };
+
+            // Combine: show what was requested + what happened
+            let content = if raw_content.is_empty() {
+                synthetic
             } else {
-                content.to_string()
+                format!("{}\nResult: {}", synthetic, raw_content)
             };
 
             let is_error = payload

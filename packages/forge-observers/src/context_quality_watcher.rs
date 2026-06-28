@@ -50,7 +50,13 @@ impl Observer for ContextQualityWatcher {
             red as f64 / total as f64
         };
         Some(
-            serde_json::json!({"dimension":"context_quality","redundancy_ratio":ratio,"unique_files":self.files_read.lock().unwrap().len()}),
+            serde_json::json!({
+                "dimension":"context_quality",
+                "redundancy_ratio":ratio,
+                "unique_files":self.files_read.lock().unwrap().len(),
+                "context_ratio": ratio,  // alias for StaleContext detector
+                "context_pressure": ratio, // alias for StaleContext detector
+            }),
         )
     }
 }

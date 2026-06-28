@@ -56,9 +56,9 @@ async fn readiness_ok() {
 async fn harness_has_counts() {
     let (s, b) = get("/api/v1/harness").await;
     assert_eq!(s, 200);
-    assert_eq!(b["observers"]["count"], 12);
-    assert_eq!(b["detectors"]["count"], 16);
-    assert_eq!(b["strategies"]["count"], 14);
+    assert_eq!(b["observer_count"], 12);
+    assert_eq!(b["detector_count"], 16);
+    assert_eq!(b["strategy_count"], 14);
 }
 #[tokio::test]
 async fn sessions_create() {

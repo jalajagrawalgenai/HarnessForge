@@ -11,9 +11,15 @@ pub async fn get(State(state): State<Arc<AppState>>) -> Json<Value> {
         "version": env!("CARGO_PKG_VERSION"),
         "preset": cfg.preset,
         "dry_run": cfg.dry_run,
+        // Legacy flat arrays for dashboard compatibility
         "observers": cfg.enabled_observers,
         "detectors": cfg.enabled_detectors,
         "strategies": cfg.enabled_strategies,
+        // Count objects for API tests
+        "observer_count": cfg.enabled_observers.len(),
+        "detector_count": cfg.enabled_detectors.len(),
+        "strategy_count": cfg.enabled_strategies.len(),
+        // Full lists for reference
         "all_observers": ["token","latency","cost","accuracy","security","reliability","context_quality","orch","comm","compliance","memory","diversity"],
         "all_detectors": ["loop","stale_context","cost_anomaly","deadlock","hallucination","prompt_injection","secret_leak","variety_collapse","conversation_stall","goal_drift","model_mismatch","accuracy_risk","runaway_cost","resource_exhaustion","output_degradation","compliance_gap"],
         "all_strategies": ["nudge","compact","pause","escalate","fork","reroute","rollback","diversify","isolate","circuit_break","replace","interject","degrade","quarantine"],

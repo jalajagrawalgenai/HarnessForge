@@ -42,6 +42,19 @@ const INGEST_URL = FORGE_SERVER_URL
 
 const LOG_FILE = path.join(os.homedir(), '.forge', 'hook.log');
 
+// Detect model from environment
+function detectModel() {
+  // Claude Code sets these env vars
+  for (const key of ['CLAUDE_MODEL', 'ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_MODEL']) {
+    if (process.env[key]) return process.env[key];
+  }
+  // Check other providers
+  for (const key of ['OPENAI_MODEL', 'DEEPSEEK_MODEL', 'GEMINI_MODEL']) {
+    if (process.env[key]) return process.env[key];
+  }
+  return null;
+}
+
 function log(msg) {
   try {
     const dir = path.dirname(LOG_FILE);
@@ -112,6 +125,12 @@ function buildEnvelope(raw) {
     const flags = {};
     if (hookName === 'SessionStart') { flags.startsSession = true; flags.clearsNotification = true; }
     if (hookName === 'SessionEnd' || hookName === 'Stop') flags.stopsSession = true;
+
+    // Inject model into payload if missing (Claude Code hooks don't always include model)
+    if (!data.model) {
+      const envModel = detectModel();
+      if (envModel) data.model = envModel;
+    }
 
     return {
       agentClass: 'claude-code',

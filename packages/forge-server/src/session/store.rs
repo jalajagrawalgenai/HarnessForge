@@ -51,6 +51,8 @@ pub struct SessionState {
     pub result: Option<HarnessRunResult>,
     /// Ring buffer of recent agent events (last 1000)
     pub events: Vec<AgentEvent>,
+    /// Original hook names for each event (parallel to `events`)
+    pub event_hooks: Vec<String>,
     /// Broadcast channel for live WebSocket/SSE consumers
     pub event_broadcaster: broadcast::Sender<AgentEvent>,
     /// Channel to send interventions INTO the running session
@@ -97,6 +99,12 @@ pub struct SessionState {
     pub subagent_count: u64,
     /// User prompt count
     pub user_prompt_count: u64,
+    /// History of user prompts captured during the session
+    pub prompt_history: Vec<String>,
+    /// Tools that have already had loop detections reported (prevents duplicates)
+    pub loop_detected_tools: std::collections::HashSet<String>,
+    /// Detection categories already reported (prevents duplicate categories)
+    pub reported_categories: std::collections::HashSet<String>,
 }
 
 /// Thread-safe shared session store.
@@ -139,12 +147,16 @@ pub async fn save_sessions(store: &SharedSessionStore) {
             "stop_reason": s.stop_reason,
             "subagent_count": s.subagent_count,
             "user_prompt_count": s.user_prompt_count,
+            "prompt_history": s.prompt_history,
             "observations_count": s.observations.len(),
             "detections_count": s.detections.len(),
             "interventions_count": s.interventions.len(),
             "health_score": s.health_score,
-            // Persist last 200 raw events for replay
-            "events": s.events.iter().rev().take(200).cloned().collect::<Vec<_>>(),
+            // Persist last 200 events as JSON values (skip raw AgentEvent since
+            // MessageContent doesn't serialize cleanly — cumulative stats suffice)
+            "events": s.events.iter().rev().take(200).filter_map(|e| {
+                serde_json::to_value(e).ok()
+            }).collect::<Vec<_>>(),
         });
         let _ = std::fs::write(
             &path,
@@ -193,6 +205,12 @@ pub async fn load_sessions(store: &SharedSessionStore) -> u64 {
                     }
                     session.subagent_count = data["subagent_count"].as_u64().unwrap_or(0);
                     session.user_prompt_count = data["user_prompt_count"].as_u64().unwrap_or(0);
+                    if let Some(ph) = data["prompt_history"].as_array() {
+                        session.prompt_history = ph
+                            .iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect();
+                    }
                     if let Some(hs) = &data["health_score"].as_object() {
                         session.health_score =
                             serde_json::from_value(data["health_score"].clone()).ok();
@@ -244,6 +262,7 @@ impl SessionState {
             health_score: None,
             result: None,
             events: Vec::new(),
+            event_hooks: Vec::new(),
             event_broadcaster,
             intervention_tx,
             cancel_tx,
@@ -266,6 +285,9 @@ impl SessionState {
             stop_reason: None,
             subagent_count: 0,
             user_prompt_count: 0,
+            prompt_history: Vec::new(),
+            loop_detected_tools: std::collections::HashSet::new(),
+            reported_categories: std::collections::HashSet::new(),
         }
     }
 }
