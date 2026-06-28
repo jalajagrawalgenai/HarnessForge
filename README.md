@@ -5,28 +5,33 @@
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://rust-lang.org)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://pypi.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-130%20passed-brightgreen.svg)](.)
+[![Tests](https://img.shields.io/badge/tests-169%20passed-brightgreen.svg)](.)
 
 ---
 
 ## What Is Forge?
 
-Forge wraps around ANY existing AI agent and provides three capabilities no other tool offers:
+Forge wraps around ANY existing AI agent and provides a complete **4-layer observability pipeline**:
 
-| Layer | What It Does | Available Today? |
+| Layer | What It Does | Status |
 |---|---|---|
-| **Observe + Detect** | 12-dimension real-time watching. 16 issue detectors. | ✅ Yes |
-| **Intervene** | 14 autonomous strategies — nudge, compact, rollback, circuit-break... | ❌ **Nobody has this** |
-| **Self-Improve** | Mines weakness patterns across sessions. Rewrites its own rules. | ❌ **Nobody has this** |
+| **Layer 1: Observe** | 12-dimension real-time watching — token, latency, cost, accuracy, security, reliability, context, orchestration, communication, memory, compliance, diversity | ✅ |
+| **Layer 2: Detect** | 16 issue detectors — loop, stale context, cost anomaly, deadlock, hallucination, prompt injection, secret leak, variety collapse, conversation stall, goal drift, model mismatch, accuracy risk, runaway cost, resource exhaustion, output degradation, compliance gap | ✅ |
+| **Layer 3: Strategize** | 14 autonomous strategies with priority-based selection — nudge, compact, diversify, reroute, escalate, rollback, pause, interject, quarantine, replace, isolate, degrade, fork, circuit-break | ✅ |
+| **Layer 4: Self-Improve** | Meta-harness mines weakness patterns across sessions, proposes rule edits, validates improvements with A/B testing | ✅ |
+
+Every event, hook invocation, tool call, and prompt is traced end-to-end. The analysis API returns the full timeline: what each tool did, which prompt had what latency, what detectors found, which strategy was selected and why.
 
 ```
-PASSIVE TOOLS:                         FORGE (active):
-─────────────────────                  ─────────────────
-LangFuse: "Cost spiked at 2:34 PM"     Detects spike at turn 3,
-                                       swaps model. Saves $0.12.
+OBSERVE → DETECT → STRATEGIZE → SELF-IMPROVE
+   12         16         14             1
+observers  detectors  strategies   meta-harness
 
-LangSmith: "Session failed"            Checkpoints before failure,
-                                       rolls back, retries. Succeeds.
+What other tools miss — Forge catches:
+• Agent re-reads same file 4× → StaleContext → Compact context 87%→58%
+• Code generated but no tests → AccuracyRisk → Nudge: "Run tests first"
+• API key about to leak → SecretLeak → CircuitBreak immediately
+• Cost accelerating 2×/turn → RunawayCost → Degrade to cheaper model
 ```
 
 ---
@@ -467,24 +472,49 @@ result = quick_run("task", preset="crewai")
 
 ---
 
-## Architecture
+## Architecture — 4-Layer Pipeline
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    FORGE HARNESS PIPELINE                     │
-│                                                               │
-│  Agent Events → Observe → Detect → Strategize → Act → Audit  │
-│       ↑                                          │            │
-│       │        12 observers                      │            │
-│       │        16 detectors    14 strategies     ↓            │
-│  ┌────┴────┐                          ┌──────────────────┐  │
-│  │  AGENT  │←── interventions ────────│    HARNESS       │  │
-│  │ ADAPTER │                          │    RUNTIME       │  │
-│  │         │─── events ──────────────→│                  │  │
-│  └─────────┘                          └──────────────────┘  │
-│                                                               │
-│  event_tx (agent→harness)     intervention_rx (harness→agent)│
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    FORGE HARNESS — 4 LAYER PIPELINE                │
+│                                                                   │
+│  Agent Events                                                     │
+│      │                                                            │
+│      ├─→ [Layer 1: OBSERVE]                                       │
+│      │    event_to_observation() — flattens raw event into        │
+│      │    JSON with ALL fields detectors need                     │
+│      │    12 observers: token, latency, cost, accuracy,           │
+│      │    security, reliability, context, orch, comm,             │
+│      │    memory, compliance, diversity                           │
+│      │                                                            │
+│      ├─→ [Layer 2: DETECT]                                        │
+│      │    detect_from_events() — scans event history for          │
+│      │    patterns: loops (deduped per tool), stale context,      │
+│      │    cost anomalies, secret leaks, accuracy risk...          │
+│      │    16 detectors with category-level deduplication          │
+│      │                                                            │
+│      ├─→ [Layer 3: STRATEGIZE]                                    │
+│      │    Try ALL 14 strategies against each detection.           │
+│      │    Pick highest-priority match (nudge=10, compact=20,      │
+│      │    circuit_break=100). Not first-match — best-match.       │
+│      │    14 strategies with priority-based selection             │
+│      │                                                            │
+│      └─→ [Layer 4: SELF-IMPROVE]                                  │
+│           POST /v1/meta/improve — mines weakness patterns         │
+│           across completed sessions. Proposes rule edits.         │
+│           GET /v1/meta/weaknesses — current weakness patterns     │
+│           GET /v1/meta/edits — pending harness rule changes       │
+│                                                                   │
+│  ┌──────────┐                          ┌──────────────────┐      │
+│  │  AGENT   │←── interventions ────────│  FORGE SERVER    │      │
+│  │ (Claude, │    nudge, compact,       │  (Axum + WS)     │      │
+│  │  Cursor, │    circuit_break...      │  17 route modules│      │
+│  │  CrewAI) │─── events via hooks ────→│  REST + SSE + WS │      │
+│  └──────────┘                          └──────────────────┘      │
+│                                                                   │
+│  Persistence: ~/.forge/sessions/*.json — survives restarts        │
+│  Hooks: ~/.claude/settings.json — auto-registered for Claude Code │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -559,19 +589,19 @@ result = quick_run("task", preset="crewai")
 | `forge-sdk` | 19 files | Public API — types, events, AgentAdapter, HarnessBuilder, 31 presets |
 | `forge-harness` | 10 files | Pipeline engine — event bus, plugin registry, runtime, checkpoint, human gate, factory |
 | `forge-observers` | 14 files | 12-dimensional watchers + health scorer |
-| `forge-detectors` | 17 files | 16 detectors |
-| `forge-strategies` | 15 files | 14 intervention strategies |
+| `forge-detectors` | 17 files | 16 detectors with category-level deduplication |
+| `forge-strategies` | 15 files | 14 intervention strategies with priority-based selection |
 | `forge-audit` | 16 files | Immutable audit trail, SQLite/Postgres stores, FTS, hash-chain, replay, export |
 | `forge-meta` | 12 files | Self-improving meta-harness — weakness miner, proposer, validator, A/B testing |
 | `forge-cli` | 1 main + commands | CLI — `forge init`, `forge run`, `forge doctor`, `forge explain`, etc. |
-| `forge-server` | routes + ws | axum REST + SSE + WebSocket server |
+| `forge-server` | 17 route modules | Axum REST + SSE + WebSocket server — full pipeline per ingest, tabbed analysis |
 | `forge-bridge` | 4 files | HTTP client, token counter, model catalog, cost calculator |
 | `forge-mcp` | 4 files | MCP client, server, gateway, discovery |
 | `forge-skills` | 3 files | Skill registry, composer, built-in skills |
 | `forge-py` | 3 files | Python bindings (PyO3) — `pip install forge-agent-sdk` |
 | `forge-adapters` | 6 files | Real AgentAdapter impls for ALL 31 agent types (CLI, HTTP, Python, Bridge) + AdapterFactory |
 | `forge-cloud` | 5 files | AWS, Azure, GCP cloud integration traits + deploy |
-| **Total** | **180+ source files** | **130 tests, 0 failures** |
+| **Total** | **188 source files** | **169 tests, 0 failures** |
 
 ---
 
@@ -661,13 +691,20 @@ When Claude Code runs through Forge, it catches things like:
 ## Project Status
 
 ### ✅ Implemented
-- [x] Full type system: AgentEvent (20 variants), Intervention (17 variants), AgentOutcome
+- [x] Full Event type system: AgentEvent (20 variants), Intervention (17 variants), AgentOutcome
 - [x] AgentAdapter trait + MockAgent
-- [x] HarnessBuilder + Harness + HarnessRuntime
+- [x] HarnessBuilder + PluginRegistry + HarnessRuntime
 - [x] 12 observers, 16 detectors, 14 strategies (all with real logic)
+- [x] 4-layer pipeline: Observe → Detect → Strategize → Self-Improve
+- [x] event_to_observation() — bridges observer→detector field mismatch
+- [x] Priority-based strategy selection (try all, pick highest-priority match)
+- [x] Category-level detector deduplication + per-tool loop dedup
+- [x] forge-server: 17 route modules, full REST + SSE + WebSocket API
+- [x] Tabbed session analysis: Event Log, Hook Trace, Tools & Prompts, Detections, Context
+- [x] Token + cost estimation with clear estimated/real labeling
+- [x] Model auto-detection from hooks + environment variables
+- [x] Session persistence to ~/.forge/sessions/*.json (survives restarts)
 - [x] 31 presets (all wireable via factory)
-- [x] Pipeline engine (observe→detect→strategize→act→audit)
-- [x] Runtime (channel-based agent↔harness communication)
 - [x] Audit trail (immutable append-only, hash chain, signing)
 - [x] SQLite, In-memory, and Postgres audit stores
 - [x] Human gate (pause/approve/reject/override state machine)
@@ -678,13 +715,10 @@ When Claude Code runs through Forge, it catches things like:
 - [x] Skills registry + composer
 - [x] Cloud traits (AWS, Azure, GCP)
 - [x] Python bindings — `pip install forge-agent-sdk` (31 presets, Python 3.10–3.14)
-- [x] Working Rust example (`examples/basic-agent/`)
-- [x] Docker image (multi-stage Dockerfile)
-- [x] Dashboard scaffold (Leptos WASM, `forge-dashboard`)
-- [x] CI/CD workflow (`.github/workflows/publish-pypi.yml` — builds 15 wheels on tag push)
 - [x] Real AgentAdapters for ALL 31 agent types (`packages/forge-adapters/`)
 - [x] AdapterFactory — auto-maps AgentType → CliAgent/HttpAgent/PythonAgent/BridgeAgent
-- [x] 130 tests, 0 failures
+- [x] Dashboard with tabbed full-context analysis
+- [x] CI/CD workflow (`.github/workflows/publish-pypi.yml` — builds 15 wheels on tag push)
 - [x] SSO/SAML/OIDC auth (`forge-auth` — Okta, Azure AD, Google Workspace, RBAC)
 - [x] EU AI Act compliance packs (`forge-compliance` — Art.14/15, SOC 2, GDPR)
 - [x] LangFuse / W&B Weave / OpenTelemetry export (`forge-export`)
@@ -696,8 +730,14 @@ When Claude Code runs through Forge, it catches things like:
 ### 🚧 In Progress
 - [ ] TypeScript bindings (NAPI-RS)
 - [ ] CLI TUI (`forge watch` with ratatui)
-- [ ] forge-server route wiring to real SDK
 - [ ] Plugin marketplace registry server (client is done)
+
+### 📋 Future
+- [ ] Docker Compose quickstart
+- [ ] GitHub Action for CI (`forgelabs/forge-action`)
+- [ ] Performance profiler (`forge profile`)
+- [ ] Interactive debugger (`forge debug`)
+- [ ] Carbon footprint tracking
 
 ### 📋 Future
 - [ ] Docker Compose quickstart
@@ -714,4 +754,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Built with Rust 🦀** | 180+ source files | 130 tests | 0 failures
+**Built with Rust 🦀** | 188 source files | 169 tests | 0 failures | 4-layer pipeline (Observe → Detect → Strategize → Self-Improve)

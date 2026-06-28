@@ -19,38 +19,9 @@ nav:
   - Getting Started:
       - Quickstart: getting-started/quickstart.md
       - Installation: getting-started/installation.md
-      - First Agent: getting-started/first-agent.md
-  - Guides:
-      - Agent Adapter: guides/agent-adapter.md
-      - Custom Observer: guides/custom-observer.md
-      - Custom Detector: guides/custom-detector.md
-      - Custom Strategy: guides/custom-strategy.md
-      - Presets: guides/presets.md
-      - MCP Integration: guides/mcp.md
-      - Skills: guides/skills.md
-      - Cloud Deployment: guides/cloud.md
   - Concepts:
-      - Harness Architecture: concepts/architecture.md
-      - Observer Pipeline: concepts/observers.md
-      - Detector Model: concepts/detectors.md
-      - Strategy Engine: concepts/strategies.md
-      - Meta-Harness: concepts/meta-harness.md
-      - Audit Trail: concepts/audit-trail.md
+      - 4-Layer Architecture: concepts/architecture.md
       - Self-Improvement: concepts/self-improvement.md
-  - API Reference:
-      - REST API: api/rest-api.md
-      - WebSocket API: api/websocket.md
-      - forge-sdk: api/forge-sdk.md
-      - forge-harness: api/forge-harness.md
-      - forge-observers: api/forge-observers.md
-      - forge-detectors: api/forge-detectors.md
-      - forge-strategies: api/forge-strategies.md
-      - forge-audit: api/forge-audit.md
-      - forge-meta: api/forge-meta.md
-  - Tutorials:
-      - Build a Harnessed Agent: tutorials/build-agent.md
-      - Deploy to AWS: tutorials/deploy-aws.md
-      - Custom Security Detector: tutorials/security-detector.md
   - CLI Reference: cli.md
 
 markdown_extensions:

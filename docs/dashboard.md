@@ -15,7 +15,13 @@ forge serve
 Type your task, select agent type (31 options) and preset, click Run. Watch the live session stream with real-time health gauges.
 
 ### Sessions
-View all past and active sessions. Filter by status, agent type, or date. Click any session for full detail or live replay.
+View all past and active sessions with Tokens and Model columns. Filter by status, agent type, or date. Click any session for tabbed full-context analysis:
+
+- **Overview** — session summary, health score, recommendations
+- **Timeline** — every event with seq#, time, type, tool, args, result, duration
+- **Tools & Prompts** — every tool call with extracted args/results; every prompt with following tool count, latency, tokens
+- **Detections** — issues grouped by category with severity, confidence, descriptions
+- **Hooks & Context** — events grouped by hook type; context pressure history over time
 
 ### Live
 WebSocket-connected real-time view of a running session. Shows conversation stream, 12-dimension health gauges, and intervention log. Pause/Resume controls.

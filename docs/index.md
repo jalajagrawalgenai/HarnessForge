@@ -1,15 +1,15 @@
 # Forge — The Agent Harness SDK
 
-**Self-improving harness that watches, detects, and intervenes for ANY AI agent.**
+**Self-improving harness with 4-layer pipeline: Observe → Detect → Strategize → Self-Improve. Works with ANY AI agent.**
 
-Forge wraps around your existing agents (LangGraph, CrewAI, AutoGen, Claude Code, raw APIs) and adds:
+Forge wraps around your existing agents (Claude Code, Cursor, LangGraph, CrewAI, AutoGen, raw APIs) and adds:
 
-- **12-dimensional observation** — token, latency, cost, accuracy, security, and more
-- **16 real-time detectors** — loop, stale context, secret leak, hallucination, deadlock...
-- **14 autonomous interventions** — nudge, compact, pause, escalate, circuit break...
+- **Layer 1: Observe** — 12-dimension real-time watching (token, latency, cost, accuracy, security, reliability, context, orch, comm, memory, compliance, diversity)
+- **Layer 2: Detect** — 16 real-time detectors (loop, stale context, secret leak, hallucination, deadlock, cost anomaly...)
+- **Layer 3: Strategize** — 14 autonomous strategies with priority-based selection (nudge, compact, pause, escalate, circuit break...)
+- **Layer 4: Self-Improve** — Meta-harness mines weakness patterns across sessions, proposes rule edits, validates improvements
 - **Immutable audit trail** — hash-chain integrity, full-text search, session replay
-- **Self-improving meta-harness** — mines weaknesses, proposes edits, validates improvements
-- **Full featured Dashboard** — UI-driven with 15 pages, 50+ API endpoints, WebSocket live streaming
+- **Full featured Dashboard** — UI-driven with tabbed analysis, 50+ API endpoints, WebSocket live streaming
 
 ## 🚀 Quick Start — The UI Way
 
