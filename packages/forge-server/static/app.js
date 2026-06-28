@@ -421,19 +421,102 @@ function rejectEdit(id) { api('/v1/meta/edits/' + id + '/reject', {method:'POST'
 // SETTINGS
 // ═══════════════════════════════════════════════════════════
 
+var ALL_OBSERVERS = [
+  {id:'token', name:'Token Watcher', desc:'Token efficiency, cache hit rate, waste detection'},
+  {id:'latency', name:'Latency Watcher', desc:'Response time, p50/p95, slow tool detection'},
+  {id:'cost', name:'Cost Watcher', desc:'Per-turn cost tracking, budget monitoring'},
+  {id:'accuracy', name:'Accuracy Watcher', desc:'Output quality, lint errors, test pass rate'},
+  {id:'security', name:'Security Watcher', desc:'Secret leaks, prompt injection, unsafe patterns'},
+  {id:'reliability', name:'Reliability Watcher', desc:'Error rates, success ratios, retry patterns'},
+  {id:'context_quality', name:'Context Quality', desc:'Context pressure, redundancy, compaction need'},
+  {id:'orch', name:'Orchestration Watcher', desc:'Multi-agent coordination, fork/join health'},
+  {id:'comm', name:'Communication Watcher', desc:'Agent-to-agent message efficiency'},
+  {id:'compliance', name:'Compliance Watcher', desc:'Rules alignment, policy violations'},
+  {id:'memory', name:'Memory Watcher', desc:'Memory usage, retention, context window pressure'},
+  {id:'diversity', name:'Diversity Watcher', desc:'Output variety, mode collapse detection'}
+];
+var ALL_DETECTORS = [
+  {id:'loop', name:'Loop Detector', desc:'Repeated tool calls with no progress'},
+  {id:'stale_context', name:'Stale Context', desc:'Re-reading same files, context bloat'},
+  {id:'cost_anomaly', name:'Cost Anomaly', desc:'Unexpected cost spikes vs baseline'},
+  {id:'deadlock', name:'Deadlock', desc:'Agents waiting on each other indefinitely'},
+  {id:'hallucination', name:'Hallucination', desc:'Referencing non-existent symbols/files'},
+  {id:'prompt_injection', name:'Prompt Injection', desc:'Injection patterns in user input'},
+  {id:'secret_leak', name:'Secret Leak', desc:'API keys, tokens, passwords in output'},
+  {id:'variety_collapse', name:'Variety Collapse', desc:'Output becoming too similar'},
+  {id:'conversation_stall', name:'Conversation Stall', desc:'Agent stops making progress'},
+  {id:'goal_drift', name:'Goal Drift', desc:'Task divergence from original intent'},
+  {id:'model_mismatch', name:'Model Mismatch', desc:'Task too complex for current model'},
+  {id:'accuracy_risk', name:'Accuracy Risk', desc:'Generated code without tests'},
+  {id:'runaway_cost', name:'Runaway Cost', desc:'Cost accelerating beyond threshold'},
+  {id:'resource_exhaustion', name:'Resource Exhaustion', desc:'CPU, memory, disk limits'},
+  {id:'output_degradation', name:'Output Degradation', desc:'Quality declining over time'},
+  {id:'compliance_gap', name:'Compliance Gap', desc:'Missing required compliance steps'}
+];
+var ALL_STRATEGIES = [
+  {id:'nudge', name:'Nudge', desc:'Inject hint into agent context'},
+  {id:'compact', name:'Compact', desc:'Trigger context compaction'},
+  {id:'pause', name:'Pause', desc:'Pause agent, wait for human review'},
+  {id:'escalate', name:'Escalate', desc:'Upgrade model or expand budget'},
+  {id:'fork', name:'Fork', desc:'Split into parallel sub-agents'},
+  {id:'reroute', name:'Reroute', desc:'Redirect to different tool/path'},
+  {id:'rollback', name:'Rollback', desc:'Restore from last checkpoint'},
+  {id:'diversify', name:'Diversify', desc:'Increase output variety'},
+  {id:'isolate', name:'Isolate', desc:'Quarantine suspicious agent'},
+  {id:'circuit_break', name:'Circuit Break', desc:'Stop all operations immediately'},
+  {id:'replace', name:'Replace', desc:'Swap model or tool mid-session'},
+  {id:'interject', name:'Interject', desc:'Insert message as user'},
+  {id:'degrade', name:'Degrade', desc:'Gracefully reduce capability'},
+  {id:'quarantine', name:'Quarantine', desc:'Isolate and audit agent output'}
+];
+
 function renderSettings() {
   api('/v1/harness').then(function(h) {
+    var obsChecks = ALL_OBSERVERS.map(function(o) {
+      var checked = (h.observers||[]).indexOf(o.id) >= 0 || !h.observers ? 'checked' : '';
+      return '<label class="toggle" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><input type="checkbox" ' + checked + ' onchange="toggleSetting(\'observer\',\'' + o.id + '\',this.checked)" style="margin-top:2px"><div><strong style="font-size:13px">' + o.name + '</strong><p style="font-size:11px;color:var(--text-secondary);margin:2px 0">' + o.desc + '</p></div></label>';
+    }).join('');
+    var detChecks = ALL_DETECTORS.map(function(d) {
+      var checked = (h.detectors||[]).indexOf(d.id) >= 0 || !h.detectors ? 'checked' : '';
+      return '<label class="toggle" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><input type="checkbox" ' + checked + ' onchange="toggleSetting(\'detector\',\'' + d.id + '\',this.checked)" style="margin-top:2px"><div><strong style="font-size:13px">' + d.name + '</strong><p style="font-size:11px;color:var(--text-secondary);margin:2px 0">' + d.desc + '</p></div></label>';
+    }).join('');
+    var strChecks = ALL_STRATEGIES.map(function(s) {
+      var checked = (h.strategies||[]).indexOf(s.id) >= 0 || !h.strategies ? 'checked' : '';
+      return '<label class="toggle" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><input type="checkbox" ' + checked + ' onchange="toggleSetting(\'strategy\',\'' + s.id + '\',this.checked)" style="margin-top:2px"><div><strong style="font-size:13px">' + s.name + '</strong><p style="font-size:11px;color:var(--text-secondary);margin:2px 0">' + s.desc + '</p></div></label>';
+    }).join('');
+
     document.getElementById('content').innerHTML =
-      '<div class="card"><h2>Settings</h2>' +
-      '<h3>Harness Configuration</h3>' +
-      '<p>Preset: <strong>' + (h.preset||'claude-code') + '</strong></p>' +
-      '<p>Dry Run: <strong>' + (h.dry_run ? 'Yes (observe only)' : 'No (full intervention)') + '</strong></p>' +
-      '<h3 style="margin-top:12px">Enabled Detectors</h3><p style="color:var(--text-secondary);font-size:13px">' + ((h.detectors||[]).length||16) + ' detectors active</p>' +
-      '<h3>Enabled Strategies</h3><p style="color:var(--text-secondary);font-size:13px">' + ((h.strategies||[]).length||14) + ' strategies active</p>' +
-      '<h3 style="margin-top:12px">Server Info</h3>' +
+      '<div class="card"><h2>⚙ Harness Settings</h2>' +
+      '<div class="flex-row mb"><label class="toggle"><input type="checkbox" ' + (h.dry_run ? '' : 'checked') + ' onchange="toggleSetting(\'intervention\',\'enabled\',this.checked)"> <strong>Auto-Intervention</strong></label></div>' +
+      '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Preset: <strong>' + (h.preset||'claude-code') + '</strong> | v0.3.0</p></div>' +
+
+      '<div class="card"><h3>🔍 Observers (' + ALL_OBSERVERS.length + ')</h3>' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px"><button onclick="checkAll(\'observer\',true)" style="font-size:11px;padding:4px 8px">Select All</button><button onclick="checkAll(\'observer\',false)" style="font-size:11px;padding:4px 8px">Deselect All</button></div>' +
+      obsChecks + '</div>' +
+
+      '<div class="card"><h3>⚠ Detectors (' + ALL_DETECTORS.length + ')</h3>' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px"><button onclick="checkAll(\'detector\',true)" style="font-size:11px;padding:4px 8px">Select All</button><button onclick="checkAll(\'detector\',false)" style="font-size:11px;padding:4px 8px">Deselect All</button></div>' +
+      detChecks + '</div>' +
+
+      '<div class="card"><h3>🔧 Strategies (' + ALL_STRATEGIES.length + ')</h3>' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px"><button onclick="checkAll(\'strategy\',true)" style="font-size:11px;padding:4px 8px">Select All</button><button onclick="checkAll(\'strategy\',false)" style="font-size:11px;padding:4px 8px">Deselect All</button></div>' +
+      strChecks + '</div>' +
+
+      '<div class="card"><h3>Server Info</h3>' +
       '<p style="font-size:13px;color:var(--text-secondary)">Ingest: <code>' + window.location.origin + '/api/v1/ingest/event</code></p>' +
-      '<p style="font-size:13px;color:var(--text-secondary)">API: <a href="/api/v1/health" target="_blank">/api/v1/health</a></p>' +
-      '<p style="font-size:13px;color:var(--text-secondary);margin-top:8px">v0.3.0 — 12 observers · 16 detectors · 14 strategies</p></div>';
+      '<p style="font-size:13px;color:var(--text-secondary)">API: <a href="/api/v1/health" target="_blank">/api/v1/health</a></p></div>';
+  });
+}
+
+function toggleSetting(type, id, enabled) {
+  api('/v1/harness', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:type, id:id, enabled:enabled})})
+    .then(function(r) { console.log('Settings updated:', r); });
+}
+function checkAll(type, enable) {
+  var items = type === 'observer' ? ALL_OBSERVERS : type === 'detector' ? ALL_DETECTORS : ALL_STRATEGIES;
+  items.forEach(function(item) {
+    var cb = document.querySelector('input[onchange*=\"' + type + '\"][onchange*=\"' + item.id + '\"]');
+    if (cb) { cb.checked = enable; toggleSetting(type, item.id, enable); }
   });
 }
 

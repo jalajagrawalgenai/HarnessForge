@@ -40,18 +40,24 @@ pub fn setup_hooks(port: u16) {
 }
 
 fn write_hook_script(state_dir: &Path) {
-    let hook_dest = state_dir.join("observe_hook.mjs");
-    if hook_dest.exists() {
-        return;
-    }
+    // Always write latest hook scripts (overwrite old versions)
+    let hook_js = state_dir.join("observe_hook.mjs");
+    let hook_ps1 = state_dir.join("observe_hook.ps1");
 
-    let script = include_str!(concat!(
+    let js_script = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../forge-py/forge_sdk/hooks/observe_hook.mjs"
     ));
+    let ps1_script = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../forge-py/forge_sdk/hooks/observe_hook.ps1"
+    ));
 
-    if let Err(e) = fs::write(&hook_dest, script) {
-        tracing::warn!("Could not write hook script: {}", e);
+    if let Err(e) = fs::write(&hook_js, js_script) {
+        tracing::warn!("Could not write JS hook: {}", e);
+    }
+    if let Err(e) = fs::write(&hook_ps1, ps1_script) {
+        tracing::warn!("Could not write PS1 hook: {}", e);
     }
 }
 
@@ -62,7 +68,13 @@ fn register_in_claude_settings(port: u16) {
         .display()
         .to_string()
         .replace('\\', "/");
+    // Primary: Node.js hook with explicit --port
     let hook_cmd = format!("node {}/observe_hook.mjs --port {}", hook_path, port);
+    // Fallback: PowerShell hook for Windows without Node.js
+    let ps_cmd = format!(
+        "powershell -NoProfile -ExecutionPolicy Bypass -File {}/observe_hook.ps1 -Port {}",
+        hook_path, port
+    );
 
     let mut settings: Value = if settings_path.exists() {
         fs::read_to_string(&settings_path)
@@ -103,11 +115,16 @@ fn register_in_claude_settings(port: u16) {
             });
             if !already {
                 hl.push(json!({"type": "command", "command": hook_cmd}));
+                // Also add PowerShell fallback
+                hl.push(json!({"type": "command", "command": ps_cmd}));
             }
         } else {
             entries.push(json!({
                 "matcher": "",
-                "hooks": [{"type": "command", "command": hook_cmd}]
+                "hooks": [
+                    {"type": "command", "command": hook_cmd},
+                    {"type": "command", "command": ps_cmd},
+                ]
             }));
         }
     }
