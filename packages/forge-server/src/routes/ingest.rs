@@ -762,25 +762,58 @@ fn hook_to_agent_event(
             })
         }
         "PostToolUse" => {
+            // Extract tool result from Claude Code's hook payload
             let tool_response = payload.get("tool_response");
             let content = tool_response.and_then(|v| v.as_str()).unwrap_or("");
+            // If content is empty, try to describe what was done
+            let content = if content.is_empty() {
+                let ti = payload.get("tool_input").cloned().unwrap_or(json!({}));
+                match tool_name {
+                    "Write" | "Edit" => {
+                        let path = ti.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+                        format!("Modified {}", path)
+                    }
+                    "Read" => {
+                        let path = ti.get("file_path").and_then(|v| v.as_str()).unwrap_or("");
+                        format!("Read {}", path)
+                    }
+                    "Bash" | "PowerShell" => {
+                        let cmd = ti.get("command").and_then(|v| v.as_str()).unwrap_or("");
+                        format!("Ran: {}", if cmd.len() > 60 { &cmd[..60] } else { cmd })
+                    }
+                    "Grep" => {
+                        let pattern = ti.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+                        format!("Searched: {}", pattern)
+                    }
+                    _ => format!("{} completed", tool_name),
+                }
+            } else {
+                content.to_string()
+            };
+
             let is_error = payload
                 .get("is_error")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
 
-            let usage = payload.get("tool_use_result").or(tool_response);
-            let token_count = usage
-                .and_then(|v| v.get("usage"))
+            // Extract token count from usage data in payload
+            let token_count = payload
+                .get("usage")
                 .and_then(|v| v.get("input_tokens"))
                 .and_then(|v| v.as_u64())
+                .or_else(|| {
+                    payload
+                        .get("usage")
+                        .and_then(|v| v.get("output_tokens"))
+                        .and_then(|v| v.as_u64())
+                })
                 .unwrap_or(0);
 
             Some(AgentEvent::ToolCallEnd {
                 agent_id: agent_id.to_string(),
                 tool: tool_name.to_string(),
                 result: forge_sdk::events::ToolResult {
-                    content: content.to_string(),
+                    content,
                     is_error,
                     duration_ms: 0,
                     token_count,
