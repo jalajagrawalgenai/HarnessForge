@@ -150,7 +150,9 @@ async fn run_pipeline_cycle(
                         });
                         match best_strategy {
                             None => best_strategy = Some((priority, s_json, i_json)),
-                            Some((p, _, _)) if priority > p => best_strategy = Some((priority, s_json, i_json)),
+                            Some((p, _, _)) if priority > p => {
+                                best_strategy = Some((priority, s_json, i_json))
+                            }
                             _ => {}
                         }
                     }
@@ -579,8 +581,9 @@ pub async fn ingest_event(
                             if let Some(desc) = d.get("description").and_then(|c| c.as_str()) {
                                 // Extract tool name from description: "Loop detected: 'Bash' called..."
                                 if let Some(start) = desc.find('\'') {
-                                    if let Some(end) = desc[start+1..].find('\'') {
-                                        s.loop_detected_tools.insert(desc[start+1..start+1+end].to_string());
+                                    if let Some(end) = desc[start + 1..].find('\'') {
+                                        s.loop_detected_tools
+                                            .insert(desc[start + 1..start + 1 + end].to_string());
                                     }
                                 }
                             }
@@ -1384,7 +1387,8 @@ fn detect_from_events(
     for det in &detections {
         let cat = det["category"].as_str().unwrap_or("");
         let desc = det["description"].as_str().unwrap_or("");
-        let strategy_name = strategy_map.iter()
+        let strategy_name = strategy_map
+            .iter()
             .find(|(c, _)| *c == cat)
             .map(|(_, s)| *s)
             .unwrap_or("nudge");
@@ -1505,7 +1509,12 @@ fn compute_health_dimensions(observations: &[Value]) -> forge_sdk::types::health
 /// (computed metrics) and detector input (raw event context).
 fn event_to_observation(event: &AgentEvent) -> Option<Value> {
     match event {
-        AgentEvent::ToolCallStart { tool, args, timestamp, .. } => {
+        AgentEvent::ToolCallStart {
+            tool,
+            args,
+            timestamp,
+            ..
+        } => {
             let file_path = args.get("file_path").and_then(|v| v.as_str());
             let command = args.get("command").and_then(|v| v.as_str());
             Some(json!({
@@ -1520,7 +1529,12 @@ fn event_to_observation(event: &AgentEvent) -> Option<Value> {
                 "usage_pct": 0.0,
             }))
         }
-        AgentEvent::ToolCallEnd { tool, result, timestamp, .. } => Some(json!({
+        AgentEvent::ToolCallEnd {
+            tool,
+            result,
+            timestamp,
+            ..
+        } => Some(json!({
             "tool_name": tool,
             "tool": tool,
             "content": result.content,
@@ -1529,7 +1543,12 @@ fn event_to_observation(event: &AgentEvent) -> Option<Value> {
             "msg_timestamp_ms": timestamp.timestamp_millis(),
             "cost_per_turn": result.token_count as f64 * 0.000003,  // rough estimate
         })),
-        AgentEvent::MessageSent { from: _, content, timestamp, .. } => {
+        AgentEvent::MessageSent {
+            from: _,
+            content,
+            timestamp,
+            ..
+        } => {
             let text = match content {
                 forge_sdk::events::MessageContent::Text(t) => t.clone(),
                 _ => return None,
@@ -1542,29 +1561,48 @@ fn event_to_observation(event: &AgentEvent) -> Option<Value> {
                 "msg_timestamp_ms": timestamp.timestamp_millis(),
             }))
         }
-        AgentEvent::ContextPressure { current_ratio, timestamp, .. } => Some(json!({
+        AgentEvent::ContextPressure {
+            current_ratio,
+            timestamp,
+            ..
+        } => Some(json!({
             "context_pressure": current_ratio,
             "context_ratio": current_ratio,
             "usage_pct": current_ratio * 100.0,
             "resource": "context_window",
             "msg_timestamp_ms": timestamp.timestamp_millis(),
         })),
-        AgentEvent::TokenUsage { model, input, output, timestamp, .. } => Some(json!({
+        AgentEvent::TokenUsage {
+            model,
+            input,
+            output,
+            timestamp,
+            ..
+        } => Some(json!({
             "model": model,
             "task": format!("{} tokens used", input + output),
             "msg_timestamp_ms": timestamp.timestamp_millis(),
             "cost_per_turn": (*input as f64 * 3.0 + *output as f64 * 15.0) / 1_000_000.0,
             "quality_score": if *output > 0 { 0.8 } else { 0.5 },
         })),
-        AgentEvent::Forked { child_id, task, timestamp, .. } => Some(json!({
+        AgentEvent::Forked {
+            child_id,
+            task,
+            timestamp,
+            ..
+        } => Some(json!({
             "waiting_agent": child_id,
             "waiting_for": task,
             "wait_duration_secs": 0u64,
             "msg_timestamp_ms": timestamp.timestamp_millis(),
             "resource": "subagent",
         })),
-        AgentEvent::OutputDelta { text, timestamp, .. } => {
-            if text.is_empty() { return None; }
+        AgentEvent::OutputDelta {
+            text, timestamp, ..
+        } => {
+            if text.is_empty() {
+                return None;
+            }
             Some(json!({
                 "agent_output": text,
                 "content": text,
@@ -1675,7 +1713,10 @@ fn hook_to_agent_event(
                 }
                 "Bash" | "PowerShell" => {
                     let cmd = ti.get("command").and_then(|v| v.as_str()).unwrap_or("");
-                    format!("Command: {}", if cmd.len() > 100 { &cmd[..100] } else { cmd })
+                    format!(
+                        "Command: {}",
+                        if cmd.len() > 100 { &cmd[..100] } else { cmd }
+                    )
                 }
                 "Grep" => {
                     let pattern = ti.get("pattern").and_then(|v| v.as_str()).unwrap_or("");

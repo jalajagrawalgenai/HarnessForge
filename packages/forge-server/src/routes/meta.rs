@@ -7,10 +7,7 @@ use std::sync::Arc;
 
 /// POST /v1/meta/improve — triggers self-improvement cycle.
 /// Analyzes completed sessions for weakness patterns, proposes rule changes.
-pub async fn improve(
-    State(state): State<Arc<AppState>>,
-    Json(_body): Json<Value>,
-) -> Json<Value> {
+pub async fn improve(State(state): State<Arc<AppState>>, Json(_body): Json<Value>) -> Json<Value> {
     let sessions = state.store.read().await;
     let completed: Vec<_> = sessions
         .values()
@@ -97,9 +94,11 @@ pub async fn improve(
     }
 
     // Group by pattern type
-    let mut groups: std::collections::HashMap<String, Vec<&Value>> = std::collections::HashMap::new();
+    let mut groups: std::collections::HashMap<String, Vec<&Value>> =
+        std::collections::HashMap::new();
     for w in &weaknesses {
-        groups.entry(w["pattern"].as_str().unwrap_or("unknown").to_string())
+        groups
+            .entry(w["pattern"].as_str().unwrap_or("unknown").to_string())
             .or_default()
             .push(w);
     }
@@ -125,12 +124,16 @@ pub async fn improve(
 /// GET /v1/meta/weaknesses — returns cached weakness patterns from last improvement cycle.
 pub async fn weaknesses(State(state): State<Arc<AppState>>) -> Json<Value> {
     let sessions = state.store.read().await;
-    let completed = sessions.values()
+    let completed = sessions
+        .values()
         .filter(|s| s.status == SessionStatus::Completed || s.status == SessionStatus::Failed)
         .count();
     let total_detections: usize = sessions.values().map(|s| s.detections.len()).sum();
     let total_interventions: usize = sessions.values().map(|s| s.interventions.len()).sum();
-    let total_tool_errors: u64 = sessions.values().map(|s| s.tool_errors.values().sum::<u64>()).sum();
+    let total_tool_errors: u64 = sessions
+        .values()
+        .map(|s| s.tool_errors.values().sum::<u64>())
+        .sum();
 
     let mut weaknesses = Vec::new();
     for s in sessions.values() {
@@ -165,7 +168,8 @@ pub async fn weaknesses(State(state): State<Arc<AppState>>) -> Json<Value> {
 
 pub async fn edits(State(state): State<Arc<AppState>>) -> Json<Value> {
     let sessions = state.store.read().await;
-    let completed = sessions.values()
+    let completed = sessions
+        .values()
         .filter(|s| s.status == SessionStatus::Completed || s.status == SessionStatus::Failed)
         .count();
 
@@ -174,7 +178,9 @@ pub async fn edits(State(state): State<Arc<AppState>>) -> Json<Value> {
     for s in sessions.values() {
         let error_rate = if s.tool_counts.values().sum::<u64>() > 0 {
             s.tool_errors.values().sum::<u64>() as f64 / s.tool_counts.values().sum::<u64>() as f64
-        } else { 0.0 };
+        } else {
+            0.0
+        };
 
         if error_rate > 0.3 {
             edits.push(json!({

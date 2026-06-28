@@ -160,10 +160,17 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
 
     let context_avg = if !s.context_pressure_history.is_empty() {
         s.context_pressure_history.iter().sum::<f64>() / s.context_pressure_history.len() as f64
-    } else { 0.0 };
-    let context_max = s.context_pressure_history.iter().cloned().fold(0.0f64, f64::max);
+    } else {
+        0.0
+    };
+    let context_max = s
+        .context_pressure_history
+        .iter()
+        .cloned()
+        .fold(0.0f64, f64::max);
 
-    let duration_secs = s.completed_at
+    let duration_secs = s
+        .completed_at
         .map(|t| (t - s.created_at).num_seconds())
         .unwrap_or_else(|| (Utc::now() - s.created_at).num_seconds());
 
@@ -172,7 +179,8 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
     let hook_trace = build_hook_trace(&s.events, &s.event_hooks);
     let tool_instances = build_tool_instances(&s.events);
     let prompt_instances = build_prompt_instances(&s.events, &s.prompt_history);
-    let detector_report = build_detector_report(&s.detections, &s.interventions, &s.strategy_results);
+    let detector_report =
+        build_detector_report(&s.detections, &s.interventions, &s.strategy_results);
 
     // ── Recommendations ──
     let mut recommendations: Vec<String> = Vec::new();
@@ -180,16 +188,19 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
         recommendations.push("Low cache hit rate — enable prompt caching to reduce costs".into());
     }
     if total_tool_errors > 0 && total_tool_errors as f64 / total_tool_calls.max(1) as f64 > 0.1 {
-        recommendations.push("High tool error rate — review tool definitions and error handling".into());
+        recommendations
+            .push("High tool error rate — review tool definitions and error handling".into());
     }
     if context_avg > 0.75 {
-        recommendations.push("Context pressure consistently high — compact more aggressively".into());
+        recommendations
+            .push("Context pressure consistently high — compact more aggressively".into());
     }
     if s.subagent_count > 5 {
         recommendations.push("High subagent spawn count — consider consolidating tasks".into());
     }
     if s.event_count > 100 && s.detections.is_empty() {
-        recommendations.push("No issues detected across many events — agent is running well".into());
+        recommendations
+            .push("No issues detected across many events — agent is running well".into());
     }
 
     let health_verdict = match s.health_score.as_ref() {
@@ -201,12 +212,13 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
     };
 
     let stop_analysis = match (&s.stop_reason, &s.status) {
-        (Some(reason), crate::session::store::SessionStatus::Completed) =>
-            format!("✅ Completed: {}", reason),
-        (Some(reason), crate::session::store::SessionStatus::Failed) =>
-            format!("❌ Failed: {}", reason),
-        (None, crate::session::store::SessionStatus::Running) =>
-            "🟢 Still running".to_string(),
+        (Some(reason), crate::session::store::SessionStatus::Completed) => {
+            format!("✅ Completed: {}", reason)
+        }
+        (Some(reason), crate::session::store::SessionStatus::Failed) => {
+            format!("❌ Failed: {}", reason)
+        }
+        (None, crate::session::store::SessionStatus::Running) => "🟢 Still running".to_string(),
         _ => format!("Status: {:?}", s.status),
     };
 
@@ -319,8 +331,12 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
 
 /// Format seconds into human-readable duration.
 fn format_duration(secs: i64) -> String {
-    if secs < 60 { return format!("{}s", secs); }
-    if secs < 3600 { return format!("{}m {}s", secs / 60, secs % 60); }
+    if secs < 60 {
+        return format!("{}s", secs);
+    }
+    if secs < 3600 {
+        return format!("{}m {}s", secs / 60, secs % 60);
+    }
     format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
 }
 
@@ -464,8 +480,8 @@ fn build_full_event_log(events: &[forge_sdk::events::AgentEvent]) -> Vec<Value> 
 /// Build hook trace — use stored hook names when available, fall back to
 /// inferring from AgentEvent variants.
 fn build_hook_trace(events: &[forge_sdk::events::AgentEvent], hooks: &[String]) -> Vec<Value> {
-    use std::collections::HashMap;
     use forge_sdk::events::AgentEvent;
+    use std::collections::HashMap;
 
     let use_stored = hooks.len() >= events.len();
     let mut hook_groups: HashMap<String, Vec<Value>> = HashMap::new();
@@ -479,7 +495,11 @@ fn build_hook_trace(events: &[forge_sdk::events::AgentEvent], hooks: &[String]) 
             AgentEvent::Failed { .. } => "StopFailure",
             AgentEvent::ToolCallStart { .. } => "PreToolUse",
             AgentEvent::ToolCallEnd { result, .. } => {
-                if result.is_error { "PostToolUseFailure" } else { "PostToolUse" }
+                if result.is_error {
+                    "PostToolUseFailure"
+                } else {
+                    "PostToolUse"
+                }
             }
             AgentEvent::MessageSent { .. } => "UserPromptSubmit",
             AgentEvent::ContextPressure { .. } => "PreCompact",
@@ -491,29 +511,54 @@ fn build_hook_trace(events: &[forge_sdk::events::AgentEvent], hooks: &[String]) 
     }
 
     for i in 0..n {
-        let hook = if use_stored { hooks[i].clone() } else { infer_hook(&events[i]).to_string() };
+        let hook = if use_stored {
+            hooks[i].clone()
+        } else {
+            infer_hook(&events[i]).to_string()
+        };
         let ev = &events[i];
         let entry = match ev {
-            forge_sdk::events::AgentEvent::Started { task, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::Started {
+                task, timestamp, ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(), "detail": task,
             }),
-            forge_sdk::events::AgentEvent::Completed { summary, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::Completed {
+                summary, timestamp, ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(), "detail": summary,
             }),
-            forge_sdk::events::AgentEvent::Failed { error, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::Failed {
+                error, timestamp, ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(), "detail": error,
             }),
-            forge_sdk::events::AgentEvent::ToolCallStart { tool, args, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::ToolCallStart {
+                tool,
+                args,
+                timestamp,
+                ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(), "tool": tool,
                 "args_display": format_tool_detail(tool, args),
             }),
-            forge_sdk::events::AgentEvent::ToolCallEnd { tool, result, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::ToolCallEnd {
+                tool,
+                result,
+                timestamp,
+                ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(), "tool": tool,
                 "is_error": result.is_error, "duration_ms": result.duration_ms,
                 "result_preview": if result.content.len() > 200 { format!("{}...", &result.content[..200]) } else { result.content.clone() },
                 "token_count": result.token_count,
             }),
-            forge_sdk::events::AgentEvent::MessageSent { from, content, timestamp, .. } => {
+            forge_sdk::events::AgentEvent::MessageSent {
+                from,
+                content,
+                timestamp,
+                ..
+            } => {
                 let text = match content {
                     forge_sdk::events::MessageContent::Text(t) => t.clone(),
                     _ => String::new(),
@@ -523,14 +568,29 @@ fn build_hook_trace(events: &[forge_sdk::events::AgentEvent], hooks: &[String]) 
                     "text": if text.len() > 200 { format!("{}...", &text[..200]) } else { text },
                 })
             }
-            forge_sdk::events::AgentEvent::ContextPressure { current_ratio, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::ContextPressure {
+                current_ratio,
+                timestamp,
+                ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(),
                 "pressure_pct": (current_ratio * 100.0) as u32,
             }),
-            forge_sdk::events::AgentEvent::Forked { child_id, task, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::Forked {
+                child_id,
+                task,
+                timestamp,
+                ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(), "child": child_id, "task": task,
             }),
-            forge_sdk::events::AgentEvent::TokenUsage { input, output, model, timestamp, .. } => json!({
+            forge_sdk::events::AgentEvent::TokenUsage {
+                input,
+                output,
+                model,
+                timestamp,
+                ..
+            } => json!({
                 "seq": i + 1, "time": timestamp.to_rfc3339(),
                 "input": input, "output": output, "model": model,
             }),
@@ -541,13 +601,20 @@ fn build_hook_trace(events: &[forge_sdk::events::AgentEvent], hooks: &[String]) 
 
     // Known hook order for consistent display
     let hook_order = [
-        "SessionStart", "UserPromptSubmit",
-        "PreToolUse", "PostToolUse", "PostToolUseFailure",
-        "PreCompact", "PostCompact",
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PreCompact",
+        "PostCompact",
         "Notification",
-        "SubagentStart", "SubagentStop",
+        "SubagentStart",
+        "SubagentStop",
         "Transcript",
-        "SessionEnd", "Stop", "StopFailure",
+        "SessionEnd",
+        "Stop",
+        "StopFailure",
     ];
 
     let mut result = Vec::new();
@@ -596,26 +663,38 @@ fn hook_description(hook: &str) -> &str {
 fn build_tool_instances(events: &[forge_sdk::events::AgentEvent]) -> Vec<Value> {
     use forge_sdk::events::AgentEvent;
     let mut instances = Vec::new();
-    let mut pending_starts: std::collections::HashMap<String, (usize, Value, String)> = std::collections::HashMap::new();
+    let mut pending_starts: std::collections::HashMap<String, (usize, Value, String)> =
+        std::collections::HashMap::new();
 
     for (i, e) in events.iter().enumerate() {
         match e {
-            AgentEvent::ToolCallStart { agent_id, tool, args, .. } => {
+            AgentEvent::ToolCallStart {
+                agent_id,
+                tool,
+                args,
+                ..
+            } => {
                 pending_starts.insert(agent_id.clone(), (i, args.clone(), tool.clone()));
             }
-            AgentEvent::ToolCallEnd { agent_id, tool, result, timestamp } => {
+            AgentEvent::ToolCallEnd {
+                agent_id,
+                tool,
+                result,
+                timestamp,
+            } => {
                 // Try to match with a pending ToolCallStart for better args display
-                let args_display = if let Some((_, args, started_tool)) = pending_starts.remove(agent_id) {
-                    if started_tool == *tool {
-                        format_tool_detail(tool, &args)
+                let args_display =
+                    if let Some((_, args, started_tool)) = pending_starts.remove(agent_id) {
+                        if started_tool == *tool {
+                            format_tool_detail(tool, &args)
+                        } else {
+                            // Tool mismatch — use fallback from result content
+                            extract_args_from_result(tool, &result.content)
+                        }
                     } else {
-                        // Tool mismatch — use fallback from result content
+                        // No matching start — extract from result content or use generic display
                         extract_args_from_result(tool, &result.content)
-                    }
-                } else {
-                    // No matching start — extract from result content or use generic display
-                    extract_args_from_result(tool, &result.content)
-                };
+                    };
 
                 instances.push(json!({
                     "seq": i + 1,
@@ -687,19 +766,32 @@ fn extract_args_from_result(tool: &str, content: &str) -> String {
 }
 
 /// Build prompt instances — each user prompt with context of what followed.
-fn build_prompt_instances(events: &[forge_sdk::events::AgentEvent], prompt_history: &[String]) -> Vec<Value> {
+fn build_prompt_instances(
+    events: &[forge_sdk::events::AgentEvent],
+    prompt_history: &[String],
+) -> Vec<Value> {
     use forge_sdk::events::AgentEvent;
     let mut instances = Vec::new();
     let mut prompt_idx = 0usize;
 
     for (i, e) in events.iter().enumerate() {
-        if let AgentEvent::MessageSent { from, content, timestamp, .. } = e {
-            if from != "user" { continue; }
+        if let AgentEvent::MessageSent {
+            from,
+            content,
+            timestamp,
+            ..
+        } = e
+        {
+            if from != "user" {
+                continue;
+            }
             let text = match content {
                 forge_sdk::events::MessageContent::Text(t) => t.clone(),
                 _ => continue,
             };
-            if text.is_empty() { continue; }
+            if text.is_empty() {
+                continue;
+            }
 
             // Find subsequent tool calls and responses until next prompt or session end
             let mut following_tools = Vec::new();
@@ -754,36 +846,50 @@ fn build_detector_report(
     strategies: &[Value],
 ) -> Value {
     // Group detections by category
-    let mut by_category: std::collections::HashMap<String, Vec<&Value>> = std::collections::HashMap::new();
+    let mut by_category: std::collections::HashMap<String, Vec<&Value>> =
+        std::collections::HashMap::new();
     for d in detections {
         if let Some(cat) = d.get("category").and_then(|c| c.as_str()) {
             by_category.entry(cat.to_string()).or_default().push(d);
         }
     }
 
-    let categories: Vec<Value> = by_category.iter().map(|(cat, items)| {
-        let severities: Vec<&str> = items.iter()
-            .filter_map(|d| d.get("severity").and_then(|s| s.as_str()))
-            .collect();
-        let worst = if severities.iter().any(|s| s.contains("Critical")) { "Critical" }
-            else if severities.iter().any(|s| s.contains("Error")) { "Error" }
-            else if severities.iter().any(|s| s.contains("Warning")) { "Warning" }
-            else { "Info" };
+    let categories: Vec<Value> = by_category
+        .iter()
+        .map(|(cat, items)| {
+            let severities: Vec<&str> = items
+                .iter()
+                .filter_map(|d| d.get("severity").and_then(|s| s.as_str()))
+                .collect();
+            let worst = if severities.iter().any(|s| s.contains("Critical")) {
+                "Critical"
+            } else if severities.iter().any(|s| s.contains("Error")) {
+                "Error"
+            } else if severities.iter().any(|s| s.contains("Warning")) {
+                "Warning"
+            } else {
+                "Info"
+            };
 
-        let confidences: Vec<f64> = items.iter()
-            .filter_map(|d| d.get("confidence").and_then(|c| c.as_f64()))
-            .collect();
-        let avg_conf = if confidences.is_empty() { 0.0 }
-            else { confidences.iter().sum::<f64>() / confidences.len() as f64 };
+            let confidences: Vec<f64> = items
+                .iter()
+                .filter_map(|d| d.get("confidence").and_then(|c| c.as_f64()))
+                .collect();
+            let avg_conf = if confidences.is_empty() {
+                0.0
+            } else {
+                confidences.iter().sum::<f64>() / confidences.len() as f64
+            };
 
-        json!({
-            "category": cat,
-            "severity": worst,
-            "count": items.len(),
-            "avg_confidence": avg_conf,
-            "instances": items,
+            json!({
+                "category": cat,
+                "severity": worst,
+                "count": items.len(),
+                "avg_confidence": avg_conf,
+                "instances": items,
+            })
         })
-    }).collect();
+        .collect();
 
     json!({
         "total_detections": detections.len(),
