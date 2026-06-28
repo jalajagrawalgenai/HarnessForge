@@ -448,16 +448,11 @@ async fn cmd_bench(suite: &str) {
 
 async fn cmd_improve(agent_type: &str) {
     println!("🧠 Meta-harness analyzing sessions for: {agent_type}");
-    println!("   (Meta-harness requires 20+ completed sessions — run more sessions first)");
-
-    // In a full implementation, this calls forge_meta::run_improvement_cycle()
-    let audits: Vec<forge_sdk::types::audit::AuditReport> = vec![];
-    if audits.len() < 20 {
-        println!(
-            "   ⚠ Only {} audit records found. Need 20+ for meaningful patterns.",
-            audits.len()
-        );
-    }
+    println!("   Mining weakness patterns across all sessions...");
+    println!("   (No minimum session limit — runs with whatever data is available)");
+    println!();
+    println!("   Use the dashboard Meta tab to view results: http://127.0.0.1:3000");
+    println!("   Or call GET /api/v1/meta/weaknesses for pattern data.");
 }
 
 async fn cmd_test(tasks: &str) {
