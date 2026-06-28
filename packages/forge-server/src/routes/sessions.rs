@@ -320,11 +320,43 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
             "observations": s.observations.len(),
         },
 
+        // Observation details grouped by dimension
+        "observation_details": group_observations_by_dimension(&s.observations),
+
+        // Raw detection and intervention data for deep inspection
+        "detection_details": s.detections.clone(),
+        "intervention_details": s.interventions.clone(),
+
         "recommendations": recommendations,
     }))
 }
 
 use chrono::Utc;
+
+/// Group observations by their dimension field, returning counts and latest samples.
+fn group_observations_by_dimension(observations: &[Value]) -> Value {
+    use std::collections::HashMap;
+    let mut groups: HashMap<String, Vec<&Value>> = HashMap::new();
+    for obs in observations {
+        if let Some(dim) = obs.get("dimension").and_then(|v| v.as_str()) {
+            groups.entry(dim.to_string()).or_default().push(obs);
+        }
+    }
+    let result: Vec<Value> = groups
+        .into_iter()
+        .map(|(dim, items)| {
+            let count = items.len();
+            let latest = items.last().cloned();
+            json!({
+                "dimension": dim,
+                "count": count,
+                "latest": latest,
+                "samples": items.iter().rev().take(5).cloned().collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    json!(result)
+}
 
 /// Return (input_price_per_token, output_price_per_token, model_family_name) for a model.
 fn model_pricing(model: &str) -> (f64, f64, String) {

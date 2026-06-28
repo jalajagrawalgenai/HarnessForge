@@ -44,26 +44,28 @@ function renderMonitor() {
 }
 
 function checkIngestStatus() {
-  api('/v1/ingest/status').then(function(s) {
+  api('/v1/sessions').then(function(d) {
     var el = document.getElementById('ingest-status');
     if (!el) return;
-    var running = s.activeSessions || 0;
-    var color = running > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)';
-    var dot = running > 0 ? '●' : '○';
+    var sessions = d.sessions || [];
+    var running = sessions.filter(function(s) { return s.status === 'running'; });
+    var cc = sessions.filter(function(s) { return s.agent_type === 'claude-code'; });
+    var cursor = sessions.filter(function(s) { return s.agent_type === 'cursor'; });
+    var ag = sessions.filter(function(s) { return s.agent_type === 'antigravity'; });
+
     el.innerHTML =
-      '<div style="display:flex;align-items:center;gap:12px">' +
-      '<span style="font-size:24px;color:' + color + '">' + dot + '</span>' +
-      '<div><strong style="font-size:16px">' + (s.message||'Waiting...') + '</strong>' +
-      '<p style="margin:4px 0;color:var(--text-secondary)">' +
-      (s.totalSessions||0) + ' sessions | ' + (s.totalEventsInRing||0) + ' events | ' +
-      (s.totalObservations||0) + ' obs | ' + (s.totalDetections||0) + ' detections | ' +
-      (s.totalInterventions||0) + ' interventions</p>' +
-      '<p style="margin:4px 0;color:var(--text-secondary);font-size:12px">' +
-      '12 observers · 16 detectors · 14 strategies — full harness on every event</p></div></div>';
-    if (running > 0) el.innerHTML += '<p style="margin-top:8px"><a href="javascript:showPage(\'sessions\')">View sessions →</a></p>';
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+      '<div class="stat-card" style="flex:1;min-width:140px"><div class="stat-value" style="color:' + (cc.length > 0 ? 'var(--accent-green)' : 'var(--accent-red)') + '">' + (cc.length > 0 ? '●' : '○') + '</div><div class="stat-label">Claude Code' + (cc.length > 0 ? ' (' + cc.length + ')' : ' (not detected)') + '</div></div>' +
+      '<div class="stat-card" style="flex:1;min-width:140px"><div class="stat-value" style="color:' + (cursor.length > 0 ? 'var(--accent-purple)' : 'var(--text-secondary)') + '">' + (cursor.length > 0 ? '●' : '○') + '</div><div class="stat-label">Cursor' + (cursor.length > 0 ? ' (' + cursor.length + ')' : ' (not detected)') + '</div></div>' +
+      '<div class="stat-card" style="flex:1;min-width:140px"><div class="stat-value" style="color:' + (ag.length > 0 ? 'var(--accent-green)' : 'var(--text-secondary)') + '">' + (ag.length > 0 ? '●' : '○') + '</div><div class="stat-label">Antigravity' + (ag.length > 0 ? ' (' + ag.length + ')' : ' (not detected)') + '</div></div>' +
+      '</div>' +
+      '<p style="margin-top:8px;font-size:13px;color:var(--text-secondary)">' +
+      '<strong>' + sessions.length + '</strong> total sessions · <strong>' + running.length + '</strong> active · ' +
+      'Events auto-detected from Claude Code hooks. Cursor/Antigravity: POST to ingest endpoint to connect.</p>';
+    if (running.length > 0) el.innerHTML += '<p style="margin-top:4px"><a href="javascript:showPage(\'sessions\')">View all sessions →</a></p>';
   }).catch(function() {
     var el = document.getElementById('ingest-status');
-    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Forge server starting...</p>';
+    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Connecting...</p>';
   });
   setTimeout(function() { if (currentPage === 'run') checkIngestStatus(); }, 5000);
 }
@@ -213,71 +215,59 @@ function renderFullAnalysis(a, raw, id) {
 
   var recsHtml = recs.length > 0 ? recs.map(function(r) { return '<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)">💡 ' + r + '</div>'; }).join('') : '<div style="font-size:13px;color:var(--accent-green)">✅ No issues — agent running optimally</div>';
 
+  // Observation details grouped by dimension
+  var obsDetails = a.observation_details || [];
+  var obsHtml = obsDetails.length > 0 ? obsDetails.map(function(g) {
+    var samples = (g.samples||[]).map(function(s) { return '<div style="font-size:10px;color:var(--text-secondary);padding:2px 0;border-bottom:1px solid var(--border);font-family:monospace">' + JSON.stringify(s).substring(0,120) + '</div>'; }).join('');
+    return '<div style="margin:4px 0;padding:6px;background:var(--bg-secondary);border-radius:4px"><strong style="font-size:12px;color:var(--accent-green)">' + (g.dimension||'?') + '</strong> <span style="font-size:11px;color:var(--text-secondary)">(' + (g.count||0) + ' readings)</span>' + samples + '</div>';
+  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No observation data yet — more events needed</p>';
+
+  // Detection details
+  var detDetails = a.detection_details || [];
+  var detHtml = detDetails.length > 0 ? detDetails.map(function(d) {
+    return '<div style="margin:4px 0;padding:8px;background:var(--bg-secondary);border-radius:4px;border-left:3px solid var(--accent-red)"><strong>' + (d.category||'issue') + '</strong> <span style="font-size:11px">' + (d.severity||'') + ' conf:' + ((d.confidence||0)*100).toFixed(0) + '%</span><p style="font-size:11px;color:var(--text-secondary)">' + (d.description||'') + '</p></div>';
+  }).join('') : '<p style="color:var(--accent-green);font-size:12px">✅ No issues detected</p>';
+
+  // Intervention details
+  var intDetails = a.intervention_details || [];
+  var intHtml = intDetails.length > 0 ? intDetails.map(function(i) {
+    return '<div style="margin:4px 0;padding:6px;background:var(--bg-secondary);border-radius:4px;border-left:3px solid var(--accent-blue)"><strong style="font-size:12px">🔧 ' + (i.strategy||'intervention') + '</strong><p style="font-size:11px;color:var(--text-secondary)">' + JSON.stringify(i).substring(0,100) + '</p></div>';
+  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No interventions applied</p>';
+
   document.getElementById('ana-body').innerHTML =
-    // ── COST + TOKEN SUMMARY ──
-    '<div class="card"><h3>📊 Cost & Token Summary</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
-    '<div class="stat-card"><div class="stat-value" style="font-size:22px">$' + cost.toFixed(4) + '</div><div class="stat-label">Est. Total Cost</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Total Tokens</div></div>' +
-    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (tk.input_tokens||0).toLocaleString() + '</div><div class="stat-label">Input Tokens</div></div>' +
-    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-blue)">' + (tk.output_tokens||0).toLocaleString() + '</div><div class="stat-label">Output Tokens</div></div>' +
-    '</div>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(1) + '%</div><div class="stat-label">Cache Hit Rate</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.cache_read_tokens||0).toLocaleString() + '</div><div class="stat-label">Cache Read</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.cache_write_tokens||0).toLocaleString() + '</div><div class="stat-label">Cache Write</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.token_efficiency||0).toFixed(1) + '%</div><div class="stat-label">Token Efficiency</div></div>' +
-    '</div></div>' +
+    // ── COST ──
+    '<div class="card"><h3>💰 Cost: <span style="color:var(--accent-green)">$' + cost.toFixed(4) + '</span></h3>' +
+    '<div class="stats-grid"><div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Tokens (' + (tk.model_family||'?') + ')</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(0) + '%</div><div class="stat-label">Cache Hit</div></div>' +
+    '<div class="stat-card"><div class="stat-value">$' + (tk.gross_cost_usd||0).toFixed(4) + '</div><div class="stat-label">Gross</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">-$' + (tk.cache_savings_usd||0).toFixed(4) + '</div><div class="stat-label">Cache Savings</div></div></div></div>' +
 
-    // ── LAYER 1: OBSERVE ──
-    '<div class="card" style="border-left:4px solid var(--accent-green)"><h3>🔍 OBSERVE — 12 Watchers</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.total_events||0) + '</div><div class="stat-label">Events</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.user_prompts||0) + '</div><div class="stat-label">Prompts</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.subagents_spawned||0) + '</div><div class="stat-label">Subagents</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.observations||0) + '</div><div class="stat-label">Observations</div></div>' +
-    '</div>' + gaugeHtml + '</div>' +
+    // ── LAYER 1: OBSERVE with details ──
+    '<div class="card" style="border-left:4px solid var(--accent-green)"><h3>🔍 OBSERVE — ' + (sm.observations||0) + ' readings across ' + obsDetails.length + ' dimensions</h3>' +
+    '<div style="max-height:400px;overflow-y:auto">' + obsHtml + '</div></div>' +
 
-    // ── LAYER 2: DETECT ──
-    '<div class="card" style="border-left:4px solid var(--accent-yellow)"><h3>⚠ DETECT — 16 Detectors</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
-    '<div class="stat-card"><div class="stat-value" style="color:' + (sm.detections > 0 ? 'var(--accent-red)' : 'var(--accent-green)') + '">' + (sm.detections||0) + '</div><div class="stat-label">Issues Found</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + ((a.loop_analysis||{}).patterns_detected||0) + '</div><div class="stat-label">Loops</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + ((a.degradation_analysis||{}).warnings||0) + '</div><div class="stat-label">Degradations</div></div>' +
-    '<div class="stat-card"><div class="stat-value" style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '">' + (cx.status||'healthy') + '</div><div class="stat-label">Context</div></div>' +
-    '</div>' +
-    (sm.detections > 0 ? '<div style="color:var(--accent-yellow);font-size:13px">⚠ Issues detected — check Meta tab for recommendations</div>' : '<div style="color:var(--accent-green);font-size:13px">✅ No issues detected</div>') +
-    '</div>' +
+    // ── LAYER 2: DETECT with details ──
+    '<div class="card" style="border-left:4px solid ' + (sm.detections > 0 ? 'var(--accent-red)' : 'var(--accent-green)') + '"><h3>⚠ DETECT — ' + (sm.detections||0) + ' issues found</h3>' + detHtml + '</div>' +
 
-    // ── LAYER 3: ACTION ──
-    '<div class="card" style="border-left:4px solid var(--accent-blue)"><h3>🔧 ACTION — 14 Strategies</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
-    '<div class="stat-card"><div class="stat-value" style="color:' + (sm.interventions > 0 ? 'var(--accent-blue)' : 'var(--text-secondary)') + '">' + (sm.interventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tl.total_calls||0) + '</div><div class="stat-label">Tool Calls</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tl.total_errors||0) + '</div><div class="stat-label">Tool Errors</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tl.unique_tools||0) + '</div><div class="stat-label">Unique Tools</div></div>' +
-    '</div></div>' +
+    // ── LAYER 3: ACTION with details ──
+    '<div class="card" style="border-left:4px solid var(--accent-blue)"><h3>🔧 ACTION — ' + (sm.interventions||0) + ' interventions</h3>' + intHtml + '</div>' +
 
-    // ── EVENT-BY-EVENT TIMELINE ──
-    '<div class="card"><h3>📋 Event Timeline</h3>' +
-    '<div style="max-height:350px;overflow-y:auto;font-family:monospace;font-size:12px">' +
-    (eventRows || '<p style="color:var(--text-secondary)">No events captured</p>') +
-    '</div></div>' +
+    // ── HEALTH GAUGES ──
+    '<div class="card"><h3>📊 Health Scores</h3>' + gaugeHtml + '</div>' +
 
     // ── TOOL USAGE ──
-    '<div class="card"><h3>🛠️ Tool Usage</h3>' +
-    '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Error Rate</th><th>% of Total</th></tr></thead><tbody>' +
-    (toolRows || '<tr><td colspan="5">No tool calls</td></tr>') + '</tbody></table></div>' +
+    '<div class="card"><h3>🛠️ Tools (' + (tl.total_calls||0) + ' calls, ' + (tl.unique_tools||0) + ' unique)</h3>' +
+    '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Rate</th><th>%</th></tr></thead><tbody>' + (toolRows||'<tr><td colspan="5">-</td></tr>') + '</tbody></table></div>' +
 
-    // ── CONTEXT ──
-    '<div class="card"><h3>📐 Context Pressure</h3>' +
-    '<p style="font-size:13px">Compaction events: <strong>' + (cx.compaction_events||0) + '</strong> | Avg: <strong>' + (cx.avg_pressure_pct||0).toFixed(1) + '%</strong> | Max: <strong>' + (cx.max_pressure_pct||0).toFixed(1) + '%</strong> | Status: <span style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '"><strong>' + (cx.status||'healthy') + '</strong></span></p></div>' +
+    // ── EVENT TIMELINE ──
+    '<div class="card"><h3>📋 Events (' + (sm.total_events||0) + ')</h3>' +
+    '<div style="max-height:250px;overflow-y:auto;font-family:monospace;font-size:11px">' + (eventRows||'<p style="color:var(--text-secondary)">No events</p>') + '</div></div>' +
 
-    // ── META ──
-    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 META — Recommendations</h3>' + recsHtml + '</div>' +
+    // ── CONTEXT + META ──
+    '<div class="card"><h3>📐 Context: ' + (cx.status||'?') + '</h3><p style="font-size:13px">Avg ' + (cx.avg_pressure_pct||0).toFixed(0) + '% | Max ' + (cx.max_pressure_pct||0).toFixed(0) + '% | ' + (cx.compaction_events||0) + ' compactions</p></div>' +
+    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 Recommendations</h3>' + recsHtml + '</div>' +
 
-    // ── ACTIONS ──
-    '<div class="flex-row mb" style="margin-top:16px"><button onclick="showAnalysis(\'' + id + '\')">🔄 Refresh</button><button onclick="showPage(\'sessions\')">← Sessions</button></div>';
+    '<div class="flex-row mb" style="margin-top:16px"><button onclick="showAnalysis(\'' + id + '\')">🔄 Refresh</button><button onclick="showPage(\'sessions\')">← Back</button></div>';
 }
 
 // Build event timeline from raw session data
