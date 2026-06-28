@@ -1,4 +1,4 @@
-// Forge Dashboard — Simple, working version
+// Forge Dashboard — Agent Harness
 var API_BASE = '/api';
 
 function api(path, opts) {
@@ -6,7 +6,6 @@ function api(path, opts) {
   return fetch(API_BASE + path, opts).then(function(r) { return r.json(); });
 }
 
-// Simple page switcher
 var currentPage = 'run';
 
 function showPage(name) {
@@ -17,42 +16,56 @@ function showPage(name) {
   var el = document.getElementById('content');
   el.innerHTML = '<div class="card"><p>Loading...</p></div>';
   try {
-    if (name === 'run') renderRun();
+    if (name === 'run') renderMonitor();
     else if (name === 'sessions') renderSessions();
-    else if (name === 'live') renderLive();
     else if (name === 'audit') renderAudit();
-    else if (name === 'compliance') renderCompliance();
-    else if (name === 'skills') renderSkills();
-    else if (name === 'mcp') renderMCP();
-    else if (name === 'export') renderExport();
-    else if (name === 'marketplace') renderMarketplace();
-    else if (name === 'cloud') renderCloud();
     else if (name === 'analytics') renderAnalytics();
     else if (name === 'meta') renderMeta();
-    else if (name === 'auth') renderAuth();
-    else if (name === 'admin') renderAdmin();
     else if (name === 'settings') renderSettings();
   } catch(e) { el.innerHTML = '<div class="card"><p>Error: ' + e.message + '</p></div>'; }
 }
 
-// On page load, show Run page
-document.addEventListener('DOMContentLoaded', function() {
-  showPage('run');
-});
+document.addEventListener('DOMContentLoaded', function() { showPage('run'); });
 
-// ── PAGE RENDERERS ──
+// ═══════════════════════════════════════════════════════════
+// MONITOR — Live status + ingest test
+// ═══════════════════════════════════════════════════════════
 
-function renderRun() {
+function renderMonitor() {
   document.getElementById('content').innerHTML =
     '<div class="card" style="border-left:3px solid var(--accent-green)"><h2>Live Monitoring</h2>' +
     '<div id="ingest-status"><p>Checking for agent activity...</p></div></div>' +
     '<div class="card" id="cloud-connect-card"><h2>☁️ Cloud Session Setup</h2>' +
     '<div id="cloud-info"><p>Loading connection info...</p></div></div>' +
     '<div class="card"><h2>Quick Stats</h2><div id="quick-stats"><p>Loading stats...</p></div></div>';
-
   checkIngestStatus();
   showCloudInfo();
   refreshStats();
+}
+
+function checkIngestStatus() {
+  api('/v1/ingest/status').then(function(s) {
+    var el = document.getElementById('ingest-status');
+    if (!el) return;
+    var running = s.activeSessions || 0;
+    var color = running > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)';
+    var dot = running > 0 ? '●' : '○';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px">' +
+      '<span style="font-size:24px;color:' + color + '">' + dot + '</span>' +
+      '<div><strong style="font-size:16px">' + (s.message||'Waiting...') + '</strong>' +
+      '<p style="margin:4px 0;color:var(--text-secondary)">' +
+      (s.totalSessions||0) + ' sessions | ' + (s.totalEventsInRing||0) + ' events | ' +
+      (s.totalObservations||0) + ' obs | ' + (s.totalDetections||0) + ' detections | ' +
+      (s.totalInterventions||0) + ' interventions</p>' +
+      '<p style="margin:4px 0;color:var(--text-secondary);font-size:12px">' +
+      '12 observers · 16 detectors · 14 strategies — full harness on every event</p></div></div>';
+    if (running > 0) el.innerHTML += '<p style="margin-top:8px"><a href="javascript:showPage(\'sessions\')">View sessions →</a></p>';
+  }).catch(function() {
+    var el = document.getElementById('ingest-status');
+    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Forge server starting...</p>';
+  });
+  setTimeout(function() { if (currentPage === 'run') checkIngestStatus(); }, 5000);
 }
 
 function showCloudInfo() {
@@ -61,79 +74,31 @@ function showCloudInfo() {
   var hookUrl = window.location.origin + '/api/v1/ingest/event';
   el.innerHTML =
     '<div style="background:#1e1e2e;border-radius:8px;padding:12px;margin:8px 0">' +
-    '<p style="margin:0 0 8px 0;font-weight:600;color:var(--accent-blue)">Ingest Endpoint:</p>' +
-    '<code style="font-size:13px;word-break:break-all;color:var(--accent-green)">' + hookUrl + '</code>' +
+    '<p style="margin:0 0 8px 0;font-weight:600;color:var(--accent-blue)">Universal Ingest Endpoint:</p>' +
+    '<code style="font-size:13px;word-break:break-all;color:var(--accent-green)">' + hookUrl + '</code></div>' +
+
+    '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0">' +
+
+    '<div class="card" style="border-left:3px solid var(--accent-blue)"><h4>🔧 Claude Code</h4>' +
+    '<p style="font-size:12px;color:var(--accent-green)">✅ Auto-connected</p>' +
+    '<p style="font-size:11px;color:var(--text-secondary)">Hooks registered in settings.json. Local sessions appear automatically.</p>' +
+    '<p style="font-size:11px;color:var(--text-secondary)">Remote: <code>export FORGE_SERVER_URL=...</code></p></div>' +
+
+    '<div class="card" style="border-left:3px solid var(--accent-purple)"><h4>🖥️ Cursor / VS Code</h4>' +
+    '<p style="font-size:12px;color:var(--accent-yellow)">⚡ Via REST</p>' +
+    '<p style="font-size:11px;color:var(--text-secondary)">POST session events to the ingest endpoint. Use the Forge VS Code extension or curl.</p>' +
+    '<p style="font-size:11px"><code>curl -X POST ' + hookUrl.substring(0,40) + '...</code></p></div>' +
+
+    '<div class="card" style="border-left:3px solid var(--accent-green)"><h4>🌐 Any Agent</h4>' +
+    '<p style="font-size:12px;color:var(--accent-green)">✅ Universal API</p>' +
+    '<p style="font-size:11px;color:var(--text-secondary)">Antigravity, LangGraph, CrewAI, AutoGen, etc. — POST events with <code>agentClass</code> field.</p>' +
+    '<p style="font-size:11px;color:var(--text-secondary)">All 31 agent types supported.</p></div>' +
+
     '</div>' +
-    '<p style="margin:8px 0;font-size:13px;color:var(--text-secondary)">' +
-    '<strong>Local Claude Code:</strong> Already connected — hooks auto-registered in settings.json. ' +
-    'Events appear automatically.</p>' +
-    '<p style="margin:8px 0;font-size:13px;color:var(--text-secondary)">' +
-    '<strong>Cloud / Remote Claude Code:</strong> Set <code>FORGE_SERVER_URL</code> on the remote machine:</p>' +
-    '<div style="background:#1e1e2e;border-radius:8px;padding:12px;margin:8px 0;font-size:13px">' +
-    '<p style="margin:4px 0;color:var(--text-secondary)"># Option 1: Use a tunnel (ngrok / Cloudflare Tunnel)</p>' +
-    '<code style="color:var(--accent-blue)">ngrok http ' + window.location.port + '</code>' +
-    '<p style="margin:8px 0 4px 0;color:var(--text-secondary)"># Then on the cloud machine:</p>' +
-    '<code style="color:var(--accent-blue)">export FORGE_SERVER_URL=https://xxxx.ngrok.io</code>' +
-    '<p style="margin:12px 0 4px 0;color:var(--text-secondary)"># Option 2: Install Forge on the cloud machine too</p>' +
-    '<code style="color:var(--accent-blue)">pip install forge-agent-sdk && forge serve</code>' +
-    '</div>' +
+
     '<p style="margin:8px 0;font-size:12px;color:var(--text-secondary)">' +
-    'After setup, run <code>forge doctor</code> on the cloud machine to verify connectivity.</p>';
-}
-
-function checkIngestStatus() {
-  api('/v1/ingest/status').then(function(s) {
-    var el = document.getElementById('ingest-status');
-    if (!el) return;
-    var running = s.activeSessions || 0;
-    var total = s.totalSessions || 0;
-    var events = s.totalEventsInRing || 0;
-    var observations = s.totalObservations || 0;
-    var detections = s.totalDetections || 0;
-    var interventions = s.totalInterventions || 0;
-    var msg = s.message || 'Waiting for agent activity...';
-    var color = running > 0 ? 'var(--accent-green)' : 'var(--accent-yellow)';
-    var dot = running > 0 ? '●' : '○';
-    el.innerHTML =
-      '<div style="display:flex;align-items:center;gap:12px">' +
-      '<span style="font-size:24px;color:' + color + '">' + dot + '</span>' +
-      '<div><strong style="font-size:16px">' + msg + '</strong>' +
-      '<p style="margin:4px 0;color:var(--text-secondary)">' +
-      running + ' active, ' + total + ' total | ' + events + ' events | ' +
-      observations + ' observations | ' + detections + ' detections | ' + interventions + ' interventions' +
-      '</p><p style="margin:4px 0;color:var(--text-secondary);font-size:13px">' +
-      '12 observers · 16 detectors · 14 strategies — full harness pipeline running on every event.' +
-      '</p></div></div>';
-    if (running > 0) {
-      el.innerHTML += '<p style="margin-top:8px"><a href="javascript:showPage(\'sessions\')">View sessions →</a></p>';
-    }
-  }).catch(function() {
-    var el = document.getElementById('ingest-status');
-    if (el) el.innerHTML = '<p style="color:var(--text-secondary)">Forge server starting up...</p>';
-  });
-  setTimeout(function() { if (currentPage === 'run') checkIngestStatus(); }, 5000);
-}
-
-function doRun() {
-  var task = document.getElementById('task').value || 'Default task';
-  var agent = document.getElementById('agent-type').value;
-  var preset = document.getElementById('preset').value;
-  document.getElementById('run-result').innerHTML = '<p>Starting...</p>';
-  api('/v1/sessions', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({task:task, agent_type:agent, preset:preset}) })
-    .then(function(r) {
-      document.getElementById('run-result').innerHTML = '<div class="card" style="border-color:var(--accent-green)"><h3>Session Created</h3><p>ID: ' + r.id + '</p><p>Status: <span class="badge badge-running">' + r.status + '</span></p><p><a href="javascript:showLive(\'' + r.id + '\')">View Live</a></p></div>';
-      refreshStats();
-    })
-    .catch(function(e) {
-      document.getElementById('run-result').innerHTML = '<p style="color:var(--accent-red)">Error: ' + e.message + '</p>';
-    });
-}
-
-function doDryRun() {
-  var task = document.getElementById('task').value || 'Default task';
-  document.getElementById('run-result').innerHTML = '<p>Dry run started...</p>';
-  api('/v1/sessions', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({task:task + ' [dry-run]', agent_type:'solo', preset:'solo'}) })
-    .then(function(r) { document.getElementById('run-result').innerHTML = '<p>Dry run session: ' + r.id + '</p>'; });
+    'Cloud/remote: <code>ngrok http ' + window.location.port + '</code> → <code>FORGE_SERVER_URL=https://xxxx.ngrok.io</code> on remote machine.' +
+    '</p>';
 }
 
 function refreshStats() {
@@ -145,262 +110,256 @@ function refreshStats() {
       '<div class="stat-card"><div class="stat-value" style="color:var(--accent-yellow)">' + (s.totalObservations||0) + '</div><div class="stat-label">Observations</div></div>' +
       '<div class="stat-card"><div class="stat-value" style="color:var(--accent-red)">' + (s.totalDetections||0) + '</div><div class="stat-label">Detections</div></div>' +
       '<div class="stat-card"><div class="stat-value" style="color:var(--accent-blue)">' + (s.totalInterventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
-      '<div class="stat-card"><div class="stat-value">' + (s.totalEventsInRing||0) + '</div><div class="stat-label">Events</div></div>' +
-      '</div>';
-  }).catch(function(){});
+      '<div class="stat-card"><div class="stat-value">' + (s.totalEventsInRing||0) + '</div><div class="stat-label">Events</div></div></div>';
+  });
 }
 
-function showLive(id) {
-  currentPage = 'live';
-  document.getElementById('content').innerHTML =
-    '<div style="max-width:1200px;margin:0 auto">' +
-    '<div id="live-header"><p>Loading harness analysis...</p></div>' +
-    '<div id="live-body"></div></div>';
+// ═══════════════════════════════════════════════════════════
+// SESSIONS
+// ═══════════════════════════════════════════════════════════
 
-  // Fetch full analysis
-  api('/v1/sessions/' + id + '/analysis').then(function(a) {
-    if (a.error) {
-      document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + a.error + '</p></div>';
-      return;
-    }
-    renderHarnessAnalysis(a, id);
+function renderSessions() {
+  api('/v1/sessions').then(function(d) {
+    var rows = (d.sessions||[]).map(function(s) {
+      var hs = s.health_score;
+      var healthHtml = '-';
+      if (hs && hs.overall !== undefined) {
+        var pct = Math.round(hs.overall * 100);
+        var hColor = hs.overall > 0.8 ? 'var(--accent-green)' : hs.overall > 0.5 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+        healthHtml = '<span style="color:' + hColor + ';font-weight:600">' + pct + '%</span>';
+      }
+      var pipe = s.pipeline || {};
+      return '<tr><td><code>' + (s.id||'').substring(0,12) + '</code></td><td>' + (s.task||'').substring(0,30) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td>' + healthHtml + '</td><td>' + (pipe.observation_count||0) + '/' + (pipe.detection_count||0) + '/' + (pipe.intervention_count||0) + '</td><td><a href="javascript:showAnalysis(\'' + s.id + '\')">Analysis</a></td></tr>';
+    }).join('');
+    document.getElementById('content').innerHTML =
+      '<div class="card"><h2>Sessions</h2>' +
+      '<p style="color:var(--text-secondary);margin-bottom:8px">O/D/I = Observations / Detections / Interventions</p>' +
+      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Health</th><th>O/D/I</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="7">No sessions yet — sessions appear automatically when you use Claude Code or other agents</td></tr>') +
+      '</tbody></table></div>';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// ANALYSIS — Full per-session harness report
+// ═══════════════════════════════════════════════════════════
+
+function showAnalysis(id) {
+  currentPage = 'sessions';
+  document.getElementById('content').innerHTML = '<div style="max-width:1200px;margin:0 auto"><div id="ana-header"><p>Loading harness analysis...</p></div><div id="ana-body"></div></div>';
+
+  // Fetch both analysis summary and raw session data for event breakdown
+  Promise.all([api('/v1/sessions/' + id + '/analysis'), api('/v1/sessions/' + id)]).then(function(results) {
+    var a = results[0];
+    var raw = results[1];
+    if (a.error) { document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + a.error + '</p></div>'; return; }
+    renderFullAnalysis(a, raw, id);
   }).catch(function(e) {
     document.getElementById('content').innerHTML = '<div class="card"><h2>Error</h2><p>' + e.message + '</p></div>';
   });
 }
 
-function renderHarnessAnalysis(a, id) {
+function renderFullAnalysis(a, raw, id) {
   var hs = a.health_analysis || {};
   var tk = a.token_analysis || {};
   var tl = a.tool_analysis || {};
   var cx = a.context_analysis || {};
-  var lp = a.loop_analysis || {};
-  var dg = a.degradation_analysis || {};
   var sm = a.session_summary || {};
   var recs = a.recommendations || [];
-
   var healthPct = Math.round((hs.overall||0) * 100);
   var healthColor = healthPct > 80 ? 'var(--accent-green)' : healthPct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
-  var healthEmoji = healthPct > 80 ? '🟢' : healthPct > 50 ? '🟡' : healthPct > 30 ? '🟠' : '🔴';
 
-  // Tool breakdown rows
+  // ── Header ──
+  document.getElementById('ana-header').innerHTML =
+    '<div class="card" style="border-left:4px solid ' + healthColor + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">' +
+    '<div><h2 style="margin:0">' + (a.task||'Untitled').substring(0,60) + '</h2>' +
+    '<p style="margin:4px 0;color:var(--text-secondary)">' + a.agent_type + ' · ' + (a.model||'unknown model') + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + '</p>' +
+    '<p style="margin:4px 0;color:var(--text-secondary);font-size:12px">Session: <code>' + id + '</code></p></div>' +
+    '<div style="text-align:right"><div style="font-size:36px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Health</div></div>' +
+    '</div>' +
+    '<div style="margin-top:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;font-size:13px;line-height:1.6">' +
+    '<strong>Verdict:</strong> ' + (a.health_verdict||'N/A') + '<br>' +
+    '<strong>Stop:</strong> ' + (a.stop_analysis||'N/A') + '</div></div>';
+
+  // ── COST BAR ──
+  var cost = tk.estimated_cost_usd || 0;
+
+  // ── Event timeline with costs ──
+  var eventRows = buildEventTimeline(raw);
+
+  // ── Tool breakdown ──
   var toolRows = (tl.breakdown||[]).map(function(t) {
     return '<tr><td><strong>' + t.tool + '</strong></td><td>' + t.calls + '</td><td>' + (t.errors > 0 ? '<span style="color:var(--accent-red)">' + t.errors + '</span>' : '0') + '</td><td>' + (t.error_rate_pct||0).toFixed(1) + '%</td><td>' + (t.pct_of_total||0).toFixed(1) + '%</td></tr>';
   }).join('');
 
-  // Dimension gauges
+  // ── Health gauges ──
   var dims = hs.dimensions || {};
   var gaugeHtml = [
-    ['Token Efficiency', dims.token_efficiency || 1, 'Cache hit rate & token reuse'],
-    ['Latency', dims.latency || 1, 'Response time health'],
-    ['Cost Efficiency', dims.cost || 1, 'Cost per turn vs baseline'],
-    ['Accuracy', dims.accuracy || 1, 'Output correctness signals'],
-    ['Security', dims.security || 1, 'Secret leaks & injection risks'],
-    ['Reliability', dims.reliability || 1, 'Error rate & success ratio'],
-    ['Context Quality', dims.context_quality || 1, 'Pressure & redundancy'],
-    ['Orchestration', dims.orchestration || 1, 'Multi-agent coordination'],
-    ['Compliance', dims.compliance || 1, 'Framework alignment']
+    ['Token Efficiency', dims.token_efficiency||1, 'Cache & reuse rate'],
+    ['Latency', dims.latency||1, 'Response speed'],
+    ['Cost', dims.cost||1, 'Cost / turn'],
+    ['Accuracy', dims.accuracy||1, 'Output quality'],
+    ['Security', dims.security||1, 'Leaks & injection'],
+    ['Reliability', dims.reliability||1, 'Error resilience'],
+    ['Context', dims.context_quality||1, 'Pressure health'],
+    ['Orchestration', dims.orchestration||1, 'Multi-agent coord'],
+    ['Compliance', dims.compliance||1, 'Rules alignment']
   ].map(function(g) {
     var pct = Math.round(g[1] * 100);
     var gColor = g[1] > 0.8 ? 'gauge-green' : g[1] > 0.5 ? 'gauge-yellow' : 'gauge-red';
-    return '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:12px"><span>' + g[0] + '</span><span style="color:' + gColor + '">' + pct + '%</span></div>' +
-      '<div class="gauge-bar" style="height:6px;border-radius:3px"><div class="gauge-fill ' + gColor + '" style="width:' + pct + '%;height:100%;border-radius:3px"></div></div>' +
-      '<div style="font-size:10px;color:var(--text-secondary)">' + g[2] + '</div></div>';
+    return '<div style="margin:4px 0"><div style="display:flex;justify-content:space-between;font-size:11px"><span>' + g[0] + '</span><span style="color:' + gColor + '">' + pct + '%</span></div><div class="gauge-bar" style="height:4px"><div class="gauge-fill ' + gColor + '" style="width:' + pct + '%"></div></div></div>';
   }).join('');
 
-  // Detections with severity
-  var detectionHtml = (sm.detections > 0) ?
-    '<div style="color:var(--accent-yellow)">⚠ ' + sm.detections + ' issues detected</div>' :
-    '<div style="color:var(--accent-green)">✅ No issues detected</div>';
+  var recsHtml = recs.length > 0 ? recs.map(function(r) { return '<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)">💡 ' + r + '</div>'; }).join('') : '<div style="font-size:13px;color:var(--accent-green)">✅ No issues — agent running optimally</div>';
 
-  var interventionHtml = (sm.interventions > 0) ?
-    '<div style="color:var(--accent-green)">🔧 ' + sm.interventions + ' interventions applied</div>' :
-    '<div style="color:var(--text-secondary)">No interventions needed</div>';
-
-  // Recommendations
-  var recsHtml = recs.length > 0 ? recs.map(function(r) {
-    return '<div style="padding:4px 0;font-size:13px;border-bottom:1px solid var(--border)">💡 ' + r + '</div>';
-  }).join('') : '<div style="font-size:13px;color:var(--text-secondary)">No recommendations — agent is running optimally</div>';
-
-  document.getElementById('live-header').innerHTML =
-    '<div class="card" style="border-left:4px solid ' + healthColor + '">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">' +
-    '<div><h2 style="margin:0">' + healthEmoji + ' ' + (a.task||'Untitled').substring(0,50) + '</h2>' +
-    '<p style="margin:4px 0;color:var(--text-secondary)">' + a.agent_type + ' · ' + (a.model||'unknown') + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + '</p></div>' +
-    '<div style="text-align:right"><div style="font-size:36px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Harness Health</div></div>' +
-    '</div>' +
-    '<div style="margin-top:8px;padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:13px">' +
-    '<strong>Stop Analysis:</strong> ' + (a.stop_analysis||'N/A') + '</div>' +
-    '<div style="margin-top:4px;padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:13px">' +
-    '<strong>Verdict:</strong> ' + (a.health_verdict||'N/A') + '</div></div>';
-
-  document.getElementById('live-body').innerHTML =
-    // ── LAYER 1: OBSERVE ──
-    '<div class="card" style="border-left:4px solid var(--accent-green)"><h3>🔍 LAYER 1: OBSERVE — 12 Real-Time Watchers</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">' +
+  document.getElementById('ana-body').innerHTML =
+    // ── COST + TOKEN SUMMARY ──
+    '<div class="card"><h3>📊 Cost & Token Summary</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
+    '<div class="stat-card"><div class="stat-value" style="font-size:22px">$' + cost.toFixed(4) + '</div><div class="stat-label">Est. Total Cost</div></div>' +
     '<div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Total Tokens</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(1) + '%</div><div class="stat-label">Cache Hit Rate</div></div>' +
-    '<div class="stat-card"><div class="stat-value">$' + (tk.estimated_cost_usd||0).toFixed(4) + '</div><div class="stat-label">Est. Cost</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.total_events||0) + '</div><div class="stat-label">Events</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.user_prompts||0) + '</div><div class="stat-label">User Prompts</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.subagents_spawned||0) + '</div><div class="stat-label">Subagents</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">' + (tk.input_tokens||0).toLocaleString() + '</div><div class="stat-label">Input Tokens</div></div>' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-blue)">' + (tk.output_tokens||0).toLocaleString() + '</div><div class="stat-label">Output Tokens</div></div>' +
     '</div>' +
-    '<div style="margin-top:12px"><h4>Dimension Scores</h4>' + gaugeHtml + '</div></div>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(1) + '%</div><div class="stat-label">Cache Hit Rate</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.cache_read_tokens||0).toLocaleString() + '</div><div class="stat-label">Cache Read</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.cache_write_tokens||0).toLocaleString() + '</div><div class="stat-label">Cache Write</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.token_efficiency||0).toFixed(1) + '%</div><div class="stat-label">Token Efficiency</div></div>' +
+    '</div></div>' +
+
+    // ── LAYER 1: OBSERVE ──
+    '<div class="card" style="border-left:4px solid var(--accent-green)"><h3>🔍 OBSERVE — 12 Watchers</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.total_events||0) + '</div><div class="stat-label">Events</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.user_prompts||0) + '</div><div class="stat-label">Prompts</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.subagents_spawned||0) + '</div><div class="stat-label">Subagents</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (sm.observations||0) + '</div><div class="stat-label">Observations</div></div>' +
+    '</div>' + gaugeHtml + '</div>' +
 
     // ── LAYER 2: DETECT ──
-    '<div class="card" style="border-left:4px solid var(--accent-yellow)"><h3>⚠ LAYER 2: DETECT — 16 Issue Detectors</h3>' +
+    '<div class="card" style="border-left:4px solid var(--accent-yellow)"><h3>⚠ DETECT — 16 Detectors</h3>' +
     '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
     '<div class="stat-card"><div class="stat-value" style="color:' + (sm.detections > 0 ? 'var(--accent-red)' : 'var(--accent-green)') + '">' + (sm.detections||0) + '</div><div class="stat-label">Issues Found</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (lp.patterns_detected||0) + '</div><div class="stat-label">Loops</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (dg.warnings||0) + '</div><div class="stat-label">Degradations</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + ((a.loop_analysis||{}).patterns_detected||0) + '</div><div class="stat-label">Loops</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + ((a.degradation_analysis||{}).warnings||0) + '</div><div class="stat-label">Degradations</div></div>' +
     '<div class="stat-card"><div class="stat-value" style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '">' + (cx.status||'healthy') + '</div><div class="stat-label">Context</div></div>' +
     '</div>' +
-    detectionHtml + '</div>' +
+    (sm.detections > 0 ? '<div style="color:var(--accent-yellow);font-size:13px">⚠ Issues detected — check Meta tab for recommendations</div>' : '<div style="color:var(--accent-green);font-size:13px">✅ No issues detected</div>') +
+    '</div>' +
 
     // ── LAYER 3: ACTION ──
-    '<div class="card" style="border-left:4px solid var(--accent-blue)"><h3>🔧 LAYER 3: ACTION — 14 Intervention Strategies</h3>' +
-    '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">' +
-    '<div class="stat-card"><div class="stat-value" style="color:' + (sm.interventions > 0 ? 'var(--accent-green)' : 'var(--text-secondary)') + '">' + (sm.interventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
-    '<div class="stat-card"><div class="stat-value">' + (sm.observations||0) + '</div><div class="stat-label">Observations</div></div>' +
+    '<div class="card" style="border-left:4px solid var(--accent-blue)"><h3>🔧 ACTION — 14 Strategies</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
+    '<div class="stat-card"><div class="stat-value" style="color:' + (sm.interventions > 0 ? 'var(--accent-blue)' : 'var(--text-secondary)') + '">' + (sm.interventions||0) + '</div><div class="stat-label">Interventions</div></div>' +
     '<div class="stat-card"><div class="stat-value">' + (tl.total_calls||0) + '</div><div class="stat-label">Tool Calls</div></div>' +
-    '</div>' +
-    interventionHtml + '</div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tl.total_errors||0) + '</div><div class="stat-label">Tool Errors</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tl.unique_tools||0) + '</div><div class="stat-label">Unique Tools</div></div>' +
+    '</div></div>' +
 
-    // ── LAYER 4: META ──
-    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 LAYER 4: META — Self-Improvement</h3>' +
-    recsHtml + '</div>' +
+    // ── EVENT-BY-EVENT TIMELINE ──
+    '<div class="card"><h3>📋 Event Timeline</h3>' +
+    '<div style="max-height:350px;overflow-y:auto;font-family:monospace;font-size:12px">' +
+    (eventRows || '<p style="color:var(--text-secondary)">No events captured</p>') +
+    '</div></div>' +
 
-    // ── TOOL USAGE DETAIL ──
-    '<div class="card"><h3>🛠️ Tool Usage Breakdown</h3>' +
+    // ── TOOL USAGE ──
+    '<div class="card"><h3>🛠️ Tool Usage</h3>' +
     '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Error Rate</th><th>% of Total</th></tr></thead><tbody>' +
-    (toolRows || '<tr><td colspan="5">No tool calls recorded</td></tr>') + '</tbody></table></div>' +
+    (toolRows || '<tr><td colspan="5">No tool calls</td></tr>') + '</tbody></table></div>' +
 
-    // ── TOKEN DETAIL ──
-    '<div class="card"><h3>📊 Token Analysis</h3>' +
-    '<table style="font-size:13px"><tr><td>Input Tokens</td><td><strong>' + (tk.input_tokens||0).toLocaleString() + '</strong></td><td>Cache Read</td><td><strong>' + (tk.cache_read_tokens||0).toLocaleString() + '</strong></td></tr>' +
-    '<tr><td>Output Tokens</td><td><strong>' + (tk.output_tokens||0).toLocaleString() + '</strong></td><td>Cache Write</td><td><strong>' + (tk.cache_write_tokens||0).toLocaleString() + '</strong></td></tr>' +
-    '<tr><td>Total</td><td><strong>' + (tk.total_tokens||0).toLocaleString() + '</strong></td><td>Cache Hit</td><td><strong>' + (tk.cache_hit_pct||0).toFixed(1) + '%</strong></td></tr>' +
-    '<tr><td>Est. Cost</td><td><strong>$' + (tk.estimated_cost_usd||0).toFixed(5) + '</strong></td><td>Efficiency</td><td><strong>' + (tk.token_efficiency||0).toFixed(1) + '%</strong></td></tr></table></div>' +
-
-    // ── CONTEXT DETAIL ──
+    // ── CONTEXT ──
     '<div class="card"><h3>📐 Context Pressure</h3>' +
-    '<p>Compaction events: <strong>' + (cx.compaction_events||0) + '</strong> | Avg pressure: <strong>' + (cx.avg_pressure_pct||0).toFixed(1) + '%</strong> | Max: <strong>' + (cx.max_pressure_pct||0).toFixed(1) + '%</strong> | Status: <span style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '"><strong>' + (cx.status||'healthy') + '</strong></span></p></div>' +
+    '<p style="font-size:13px">Compaction events: <strong>' + (cx.compaction_events||0) + '</strong> | Avg: <strong>' + (cx.avg_pressure_pct||0).toFixed(1) + '%</strong> | Max: <strong>' + (cx.max_pressure_pct||0).toFixed(1) + '%</strong> | Status: <span style="color:' + (cx.status==='critical'?'var(--accent-red)':cx.status==='warning'?'var(--accent-yellow)':'var(--accent-green)') + '"><strong>' + (cx.status||'healthy') + '</strong></span></p></div>' +
 
-    // ── REFRESH & ACTIONS ──
-    '<div class="flex-row mb" style="margin-top:16px">' +
-    '<button onclick="showLive(\'' + id + '\')">🔄 Refresh Analysis</button>' +
-    '<button onclick="doPause(\'' + id + '\')">⏸ Pause</button>' +
-    '<button onclick="doResume(\'' + id + '\')">▶ Resume</button>' +
-    '<button onclick="showPage(\'sessions\')">← Back to Sessions</button></div>';
+    // ── META ──
+    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 META — Recommendations</h3>' + recsHtml + '</div>' +
+
+    // ── ACTIONS ──
+    '<div class="flex-row mb" style="margin-top:16px"><button onclick="showAnalysis(\'' + id + '\')">🔄 Refresh</button><button onclick="showPage(\'sessions\')">← Sessions</button></div>';
 }
 
-function formatDuration(secs) {
-  if (secs < 60) return secs + 's';
-  if (secs < 3600) return Math.floor(secs/60) + 'm ' + (secs%60) + 's';
-  return Math.floor(secs/3600) + 'h ' + Math.floor((secs%3600)/60) + 'm';
+// Build event timeline from raw session data
+function buildEventTimeline(raw) {
+  var events = [];
+  // From pipeline observations
+  var obs = (raw.pipeline && raw.pipeline.observations) ? raw.pipeline.observations : [];
+  // From session events list
+  var sev = raw.events || [];
+
+  // Build rows from AgentEvents
+  var rows = sev.map(function(e, i) {
+    var icon = '●';
+    var type = 'event';
+    var detail = '';
+    var costStr = '';
+    if (typeof e === 'string') { detail = e; }
+    else if (e && e.type) {
+      type = e.type;
+      if (type === 'started') { icon = '▶'; detail = e.task || ''; }
+      else if (type === 'completed') { icon = '✓'; detail = e.summary || ''; }
+      else if (type === 'failed') { icon = '✗'; detail = e.error || ''; }
+      else if (type === 'tool_call_start') { icon = '→'; detail = (e.tool||'') + ': ' + JSON.stringify(e.args||{}).substring(0,80); }
+      else if (type === 'tool_call_end') { icon = '←'; detail = (e.tool||'') + ' done'; costStr = e.result && e.result.token_count ? ' <span style="color:var(--accent-blue)">' + e.result.token_count + ' tok</span>' : ''; }
+      else if (type === 'message_sent') { icon = '💬'; detail = (e.content && e.content.text) ? e.content.text.substring(0,80) : ''; }
+      else if (type === 'context_pressure') { icon = '📐'; detail = 'Pressure: ' + ((e.current_ratio||0)*100).toFixed(0) + '%'; }
+      else { detail = JSON.stringify(e).substring(0,100); }
+    }
+    return '<div style="padding:2px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-secondary)">' + icon + '</span> ' + '<span style="color:var(--accent-blue);font-size:10px">[' + type + ']</span> ' + detail + costStr + '</div>';
+  });
+
+  if (rows.length === 0 && obs.length > 0) {
+    rows = obs.slice(0, 20).map(function(o) {
+      return '<div style="padding:2px 0;border-bottom:1px solid var(--border);font-size:11px"><span style="color:var(--accent-green)">●</span> ' + (o.dimension||'obs') + ': ' + JSON.stringify(o).substring(0,80) + '</div>';
+    });
+  }
+
+  return rows.length > 0 ? rows.join('') : '<p style="color:var(--text-secondary)">No events captured yet</p>';
 }
 
-function doPause(id) { api('/v1/sessions/' + id + '/pause', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); }
-function doResume(id) { api('/v1/sessions/' + id + '/resume', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); }
+function showLive(id) { showAnalysis(id); }
 
-function renderSessions() {
+// ═══════════════════════════════════════════════════════════
+// AUDIT — Per-session audit trail
+// ═══════════════════════════════════════════════════════════
+
+function renderAudit() {
   api('/v1/sessions').then(function(d) {
     var rows = (d.sessions||[]).map(function(s) {
-      var isAuto = (s.task === '(live agent session)') ? ' ⚡auto' : '';
-      var sourceStyle = isAuto ? 'color:var(--accent-green)' : 'color:var(--text-secondary)';
-      var health = s.health_score;
-      var healthHtml = '-';
-      if (health && health.overall !== undefined) {
-        var pct = Math.round(health.overall * 100);
-        var hColor = health.overall > 0.8 ? 'var(--accent-green)' : health.overall > 0.5 ? 'var(--accent-yellow)' : 'var(--accent-red)';
-        healthHtml = '<span style="color:' + hColor + ';font-weight:600">' + pct + '%</span>';
-      }
-      var pipe = s.pipeline || {};
-      var obs = pipe.observation_count || 0;
-      var dets = pipe.detection_count || 0;
-      var ivs = pipe.intervention_count || 0;
-      return '<tr><td><code>' + (s.id||'').substring(0,12) + '</code></td><td>' + (s.task||'').substring(0,35) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td>' + healthHtml + '</td><td>' + obs + '/' + dets + '/' + ivs + '</td><td><a href="javascript:showLive(\'' + s.id + '\')">Live</a></td></tr>';
+      return '<tr><td><code>' + (s.id||'').substring(0,12) + '</code></td><td>' + (s.task||'').substring(0,40) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'running') + '">' + s.status + '</span></td><td><a href="javascript:showAuditDetail(\'' + s.id + '\')">View Trail</a></td></tr>';
     }).join('');
     document.getElementById('content').innerHTML =
-      '<div class="card"><h2>Sessions</h2>' +
-      '<p style="color:var(--text-secondary);margin-bottom:8px">⚡ = auto-detected | Health = weighted score | O/D/I = Observations/Detections/Interventions</p>' +
-      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th>Health</th><th>O/D/I</th><th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="7">No sessions yet. Sessions appear automatically when you use Claude Code or other agents.</td></tr>') + '</tbody></table></div>';
-  }).catch(function(e) {
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Sessions</h2><p>Error: ' + e.message + '</p></div>';
+      '<div class="card"><h2>Audit Trail</h2><p style="color:var(--text-secondary);margin-bottom:8px">Complete event-by-event audit for every session. All events, detections, and interventions are recorded.</p>' +
+      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="5">No sessions</td></tr>') + '</tbody></table></div>';
   });
 }
 
-function renderLive() {
-  // Auto-connect to most recent running session if no specific ID
-  api('/v1/sessions').then(function(d) {
-    var running = (d.sessions || []).filter(function(s) { return s.status === 'running'; });
-    if (running.length > 0) {
-      showLive(running[0].id);
-      return;
-    }
-    // Show all sessions with Live links
-    var rows = (d.sessions || []).slice(0, 10).map(function(s) {
-      return '<tr><td>' + (s.id||'').substring(0,12) + '</td><td>' + (s.task||'').substring(0,50) + '</td><td>' + (s.agent_type||'') + '</td><td><span class="badge badge-' + (s.status||'pending') + '">' + s.status + '</span></td><td><a href="javascript:showLive(\'' + s.id + '\')">View</a></td></tr>';
-    }).join('');
+function showAuditDetail(id) {
+  api('/v1/sessions/' + id + '/analysis').then(function(a) {
+    var sm = a.session_summary || {};
+    var tk = a.token_analysis || {};
+    var tl = a.tool_analysis || {};
     document.getElementById('content').innerHTML =
-      '<div class="card"><h2>Live Sessions</h2>' +
-      '<p style="color:var(--text-secondary)">No active sessions. Select a past session to replay:</p>' +
-      '<table><thead><tr><th>ID</th><th>Task</th><th>Agent</th><th>Status</th><th></th></tr></thead><tbody>' + (rows||'<tr><td colspan="5">No sessions</td></tr>') + '</tbody></table></div>';
-  }).catch(function(e) {
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Live Session</h2><p>Error: ' + e.message + '</p></div>';
+      '<div class="card"><h2>Audit: ' + id.substring(0,12) + '</h2>' +
+      '<p style="color:var(--text-secondary)">' + (a.task||'') + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + '</p>' +
+      '<h3>Event Summary</h3>' +
+      '<table><tr><td>Total Events</td><td><strong>' + (sm.total_events||0) + '</strong></td><td>User Prompts</td><td><strong>' + (sm.user_prompts||0) + '</strong></td></tr>' +
+      '<tr><td>Tool Calls</td><td><strong>' + (tl.total_calls||0) + '</strong></td><td>Tool Errors</td><td><strong>' + (tl.total_errors||0) + '</strong></td></tr>' +
+      '<tr><td>Subagents</td><td><strong>' + (sm.subagents_spawned||0) + '</strong></td><td>Interventions</td><td><strong>' + (sm.interventions||0) + '</strong></td></tr>' +
+      '<tr><td>Detections</td><td><strong>' + (sm.detections||0) + '</strong></td><td>Observations</td><td><strong>' + (sm.observations||0) + '</strong></td></tr>' +
+      '<tr><td>Tokens</td><td><strong>' + (tk.total_tokens||0).toLocaleString() + '</strong></td><td>Est. Cost</td><td><strong>$' + (tk.estimated_cost_usd||0).toFixed(5) + '</strong></td></tr></table>' +
+      '<p style="margin-top:8px"><strong>Stop Reason:</strong> ' + (a.stop_analysis||'N/A') + '</p>' +
+      '<p style="color:var(--text-secondary);font-size:12px;margin-top:8px">Audit trail captures every event with full traceability — all data is stored in-memory per session.</p>' +
+      '<div class="flex-row" style="margin-top:12px"><button onclick="showAnalysis(\'' + id + '\')">Full Analysis</button><button onclick="showPage(\'sessions\')">← Sessions</button></div></div>';
   });
 }
 
-function renderCompliance() {
-  api('/v1/compliance/frameworks').then(function(fw) {
-    var opts = (fw.frameworks||[]).map(function(f) { return '<option value="' + f.id + '">' + f.name + '</option>'; }).join('');
-    document.getElementById('content').innerHTML =
-      '<div class="card"><h2>Compliance Reports</h2>' +
-      '<div class="flex-row mb"><select id="fw">' + opts + '</select>' +
-      '<input id="csid" placeholder="Session ID">' +
-      '<button onclick="genReport()">Generate Report</button></div>' +
-      '<div id="cr"></div></div>';
-  });
-}
+// ═══════════════════════════════════════════════════════════
+// ANALYTICS — Aggregate across all sessions
+// ═══════════════════════════════════════════════════════════
 
-function genReport() {
-  var fw = document.getElementById('fw').value;
-  var sid = document.getElementById('csid').value || 'unknown';
-  api('/v1/compliance/report?framework=' + fw + '&session_id=' + sid).then(function(r) {
-    var rows = (r.checks||[]).map(function(c) { return '<tr><td>' + (c.check||{}).id + '</td><td>' + (c.check||{}).requirement + '</td><td>' + (c.passed ? 'PASS' : 'FAIL') + '</td></tr>'; }).join('');
-    document.getElementById('cr').innerHTML = '<div class="card"><h3>' + (r.framework||fw) + '</h3><p>Compliant: <strong>' + (r.overall_compliant ? 'YES' : 'NO') + '</strong></p><table><thead><tr><th>ID</th><th>Requirement</th><th>Passed</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-  });
-}
-
-function renderAudit() { document.getElementById('content').innerHTML = '<div class="card"><h2>Audit Explorer</h2><p>Browse sessions from <a href="javascript:showPage(\'sessions\')">Sessions</a> to explore audit trails.</p></div>'; }
-function renderSkills() {
-  api('/v1/skills').then(function(d) {
-    var cards = (d.skills||[]).map(function(s) {
-      return '<div class="card"><h3>' + s.name + ' <small>v' + s.version + '</small></h3><p>' + s.description + '</p><p style="font-size:12px;color:var(--text-secondary)">Observers: ' + (s.observers||[]).join(', ') + ' | Detectors: ' + (s.detectors||[]).join(', ') + '</p></div>';
-    }).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Skills</h2><div class="grid-2">' + cards + '</div></div>';
-  });
-}
-function renderMCP() {
-  api('/v1/mcp/servers').then(function(d) {
-    var rows = (d.servers||[]).map(function(s) { return '<tr><td>' + s.name + '</td><td>' + s.transport + '</td><td>' + s.endpoint + '</td></tr>'; }).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>MCP Servers</h2><table><thead><tr><th>Name</th><th>Transport</th><th>Endpoint</th></tr></thead><tbody>' + (rows||'<tr><td colspan="3">No servers</td></tr>') + '</tbody></table><div class="card" style="margin-top:16px"><h3>MCP Tools</h3><p>Start Forge MCP server from the CLI</p></div></div>';
-  });
-}
-function renderExport() {
-  api('/v1/export/configs').then(function(d) {
-    var cards = (d.configs||[]).map(function(c) { return '<div class="card"><h3>' + c.target + '</h3><p>Enabled: ' + c.enabled + '</p></div>'; }).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Export Targets</h2><div class="grid-3">' + cards + '</div></div>';
-  });
-}
-function renderMarketplace() { document.getElementById('content').innerHTML = '<div class="card"><h2>Plugin Marketplace</h2><div class="flex-row mb"><input id="mq" placeholder="Search plugins..."><button onclick="searchMkt()">Search</button></div><div id="mkt-r"><p>Registry connection needed for full marketplace</p></div></div>'; }
-function searchMkt() { api('/v1/marketplace/search?q=' + (document.getElementById('mq').value||'')).then(function(r) { document.getElementById('mkt-r').innerHTML = '<p>Results: ' + (r.total||0) + '</p>'; }); }
-function renderCloud() {
-  api('/v1/cloud/providers').then(function(d) {
-    var cards = (d.providers||[]).map(function(p) { return '<div class="card"><h3>' + p.name.toUpperCase() + '</h3><p>Status: ' + p.status + '</p><p>Regions: ' + (p.regions||[]).join(', ') + '</p></div>'; }).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Cloud Providers</h2><div class="grid-3">' + cards + '</div></div>';
-  });
-}
 function renderAnalytics() {
   api('/v1/ingest/status').then(function(s) {
     document.getElementById('content').innerHTML =
@@ -418,24 +377,72 @@ function renderAnalytics() {
       '</div>';
   });
 }
-function renderMeta() { document.getElementById('content').innerHTML = '<div class="card"><h2>Meta-Harness</h2><p>Self-improving harness. Requires 20+ completed sessions for pattern mining.</p></div>'; }
-function renderAuth() {
-  api('/v1/auth/config').then(function(c) {
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Authentication</h2><p>SSO: ' + (c.sso ? 'Configured' : 'Not configured') + '</p><p>MFA Required: ' + (c.mfa_required ? 'Yes' : 'No') + '</p><p>Providers: ' + (c.providers||[]).join(', ') + '</p></div>';
+
+// ═══════════════════════════════════════════════════════════
+// META — Self-improving harness
+// ═══════════════════════════════════════════════════════════
+
+function renderMeta() {
+  api('/v1/meta/weaknesses').then(function(w) {
+    var weaknesses = (w.weaknesses||[]).map(function(wk) {
+      return '<div class="card"><h3>' + wk.pattern + '</h3><p>Frequency: ' + wk.count + ' | Agent: ' + (wk.agent_type||'all') + '</p><p style="color:var(--text-secondary);font-size:12px">' + (wk.description||'') + '</p></div>';
+    }).join('');
+
+    api('/v1/meta/edits').then(function(e) {
+      var edits = (e.edits||[]).map(function(ed) {
+        return '<tr><td>' + (ed.id||'').substring(0,8) + '</td><td>' + (ed.rule||'') + '</td><td>' + (ed.change||'') + '</td><td><button class="success" onclick="acceptEdit(\'' + ed.id + '\')">Accept</button> <button class="danger" onclick="rejectEdit(\'' + ed.id + '\')">Reject</button></td></tr>';
+      }).join('');
+
+      document.getElementById('content').innerHTML =
+        '<div class="card" style="border-left:4px solid var(--accent-purple)"><h2>🧠 META — Self-Improving Harness</h2>' +
+        '<p style="color:var(--text-secondary);margin-bottom:12px">Mines weakness patterns across sessions and proposes harness rule improvements. Based on the Self-Harness paper (Shanghai AI Lab, 2026).</p>' +
+        '<div class="flex-row mb"><button onclick="runImprove()">Run Improvement Cycle</button><button onclick="showPage(\'meta\')">🔄 Refresh</button></div></div>' +
+
+        '<div class="card"><h3>Weakness Patterns</h3>' +
+        (weaknesses || '<p style="color:var(--text-secondary)">No patterns mined yet. Requires 20+ completed sessions.</p>') + '</div>' +
+
+        '<div class="card"><h3>Proposed Rule Changes</h3>' +
+        '<table><thead><tr><th>ID</th><th>Rule</th><th>Change</th><th></th></tr></thead><tbody>' +
+        (edits || '<tr><td colspan="4">No pending proposals</td></tr>') + '</tbody></table></div>';
+    });
   });
 }
-function renderAdmin() {
-  api('/v1/admin/keys').then(function(k) {
-    var keyRows = (k.keys||[]).map(function(x) { return '<tr><td>' + (x.name||'') + '</td><td><code>' + (x.key||'').substring(0,16) + '...</code></td></tr>'; }).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Admin</h2><h3>API Keys</h3><div class="flex-row mb"><input id="kn" placeholder="Key name"><button onclick="createKey()">Create Key</button></div><table><thead><tr><th>Name</th><th>Key</th></tr></thead><tbody>' + (keyRows||'<tr><td colspan="2">No keys</td></tr>') + '</tbody></table></div>';
+
+function runImprove() {
+  api('/v1/meta/improve', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function(r) {
+    alert('Improvement cycle started: ' + (r.message||''));
+    showPage('meta');
   });
 }
-function createKey() { api('/v1/admin/keys', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('kn').value||'default',scopes:['read:audit']})}).then(function(){showPage('admin');}); }
+function acceptEdit(id) { api('/v1/meta/edits/' + id + '/accept', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function() { showPage('meta'); }); }
+function rejectEdit(id) { api('/v1/meta/edits/' + id + '/reject', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function() { showPage('meta'); }); }
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════
+
 function renderSettings() {
   api('/v1/harness').then(function(h) {
-    var obs = ((h.observers||{}).list||[]).map(function(o){return '<label class="toggle"><input type="checkbox" checked>' + o + '</label>';}).join('');
-    var det = ((h.detectors||{}).list||[]).map(function(d){return '<label class="toggle"><input type="checkbox" checked>' + d + '</label>';}).join('');
-    var stg = ((h.strategies||{}).list||[]).map(function(s){return '<label class="toggle"><input type="checkbox" checked>' + s + '</label>';}).join('');
-    document.getElementById('content').innerHTML = '<div class="card"><h2>Harness Settings</h2><p>Version: ' + (h.version||'?') + '</p><h3>Observers (' + ((h.observers||{}).count||0) + ')</h3><div class="grid-4">' + obs + '</div><h3>Detectors (' + ((h.detectors||{}).count||0) + ')</h3><div class="grid-4">' + det + '</div><h3>Strategies (' + ((h.strategies||{}).count||0) + ')</h3><div class="grid-4">' + stg + '</div></div>';
+    document.getElementById('content').innerHTML =
+      '<div class="card"><h2>Settings</h2>' +
+      '<h3>Harness Configuration</h3>' +
+      '<p>Preset: <strong>' + (h.preset||'claude-code') + '</strong></p>' +
+      '<p>Dry Run: <strong>' + (h.dry_run ? 'Yes (observe only)' : 'No (full intervention)') + '</strong></p>' +
+      '<h3 style="margin-top:12px">Enabled Detectors</h3><p style="color:var(--text-secondary);font-size:13px">' + ((h.detectors||[]).length||16) + ' detectors active</p>' +
+      '<h3>Enabled Strategies</h3><p style="color:var(--text-secondary);font-size:13px">' + ((h.strategies||[]).length||14) + ' strategies active</p>' +
+      '<h3 style="margin-top:12px">Server Info</h3>' +
+      '<p style="font-size:13px;color:var(--text-secondary)">Ingest: <code>' + window.location.origin + '/api/v1/ingest/event</code></p>' +
+      '<p style="font-size:13px;color:var(--text-secondary)">API: <a href="/api/v1/health" target="_blank">/api/v1/health</a></p>' +
+      '<p style="font-size:13px;color:var(--text-secondary);margin-top:8px">v0.3.0 — 12 observers · 16 detectors · 14 strategies</p></div>';
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function formatDuration(secs) {
+  if (secs < 60) return secs + 's';
+  if (secs < 3600) return Math.floor(secs/60) + 'm ' + (secs%60) + 's';
+  return Math.floor(secs/3600) + 'h ' + Math.floor((secs%3600)/60) + 'm';
 }

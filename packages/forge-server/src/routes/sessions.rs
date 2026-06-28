@@ -146,8 +146,12 @@ pub async fn analysis(
         (s.total_cache_read as f64 / s.total_input_tokens as f64) * 100.0
     } else { 0.0 };
 
-    // Cost estimate (Claude Opus pricing: $15/M input, $75/M output)
-    let est_cost = (s.total_input_tokens as f64 * 0.000015) + (s.total_output_tokens as f64 * 0.000075);
+    // Cost estimate based on detected model
+    let model = s.model_name.as_deref().unwrap_or("unknown");
+    let (input_price, output_price, model_family) = model_pricing(model);
+    let est_cost = (s.total_input_tokens as f64 * input_price) + (s.total_output_tokens as f64 * output_price);
+    let cache_savings = s.total_cache_read as f64 * input_price * 0.9; // cache reads save 90% of input cost
+    let effective_cost = est_cost - cache_savings;
 
     // Tool usage analysis
     let total_tool_calls: u64 = s.tool_counts.values().sum();
@@ -243,7 +247,12 @@ pub async fn analysis(
             "cache_read_tokens": s.total_cache_read,
             "cache_write_tokens": s.total_cache_write,
             "cache_hit_pct": cache_hit_pct,
-            "estimated_cost_usd": est_cost,
+            "estimated_cost_usd": effective_cost,
+            "gross_cost_usd": est_cost,
+            "cache_savings_usd": cache_savings,
+            "model_family": model_family,
+            "input_price_per_m": input_price * 1_000_000.0,
+            "output_price_per_m": output_price * 1_000_000.0,
             "token_efficiency": if total_tokens > 0 {
                 (s.total_output_tokens as f64 / total_tokens.max(1) as f64) * 100.0
             } else { 0.0 },
@@ -307,6 +316,29 @@ pub async fn analysis(
 }
 
 use chrono::Utc;
+
+/// Return (input_price_per_token, output_price_per_token, model_family_name) for a model.
+fn model_pricing(model: &str) -> (f64, f64, String) {
+    let m = model.to_lowercase();
+    // Claude models
+    if m.contains("opus") { return (0.000015, 0.000075, "Claude Opus".into()); }
+    if m.contains("sonnet") { return (0.000003, 0.000015, "Claude Sonnet".into()); }
+    if m.contains("haiku") { return (0.0000008, 0.000004, "Claude Haiku".into()); }
+    if m.contains("fable") { return (0.000003, 0.000015, "Claude Fable".into()); }
+    if m.contains("claude") { return (0.000003, 0.000015, "Claude (default)".into()); }
+    // GPT models
+    if m.contains("gpt-4o") { return (0.0000025, 0.000010, "GPT-4o".into()); }
+    if m.contains("gpt-4") { return (0.000030, 0.000060, "GPT-4".into()); }
+    if m.contains("gpt-3.5") { return (0.0000005, 0.0000015, "GPT-3.5".into()); }
+    if m.contains("o1") || m.contains("o3") { return (0.000015, 0.000060, "OpenAI o-series".into()); }
+    if m.contains("gpt") { return (0.0000025, 0.000010, "GPT (default)".into()); }
+    // DeepSeek
+    if m.contains("deepseek") { return (0.00000027, 0.0000011, "DeepSeek".into()); }
+    // Gemini
+    if m.contains("gemini") { return (0.00000125, 0.000005, "Gemini".into()); }
+    // Default / unknown
+    (0.000003, 0.000015, "unknown (using default)".into())
+}
 
 /// GET /v1/sessions/:id/checkpoints
 pub async fn checkpoints(

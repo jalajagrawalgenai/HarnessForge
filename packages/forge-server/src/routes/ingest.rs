@@ -445,13 +445,24 @@ pub async fn ingest_transcript(
                 .unwrap_or_default();
 
             if input > 0 || output > 0 {
+                let model = models.first().cloned().unwrap_or_else(|| "unknown".into());
+                // Set model name from transcript
+                if s.model_name.is_none() && model != "unknown" {
+                    s.model_name = Some(model.clone());
+                }
+                // Accumulate token totals
+                s.total_input_tokens += input;
+                s.total_output_tokens += output;
+                s.total_cache_read += cache_read;
+                s.total_cache_write += cache_write;
+
                 let token_event = AgentEvent::TokenUsage {
                     agent_id: s.id.clone(),
                     input,
                     output,
                     cache_read,
                     cache_write,
-                    model: models.first().cloned().unwrap_or_else(|| "unknown".into()),
+                    model,
                     timestamp: Utc::now(),
                 };
                 s.events.push(token_event.clone());
@@ -540,6 +551,7 @@ fn map_agent_class(ac: &str) -> String {
         "bolt-new" | "bolt" => "bolt-new",
         "lovable" => "lovable",
         "v0" => "v0",
+        "antigravity" | "anti-gravity" | "anti_gravity" => "antigravity",
         "solo" | "custom" | "default" => "solo",
         _ => "solo",
     }
