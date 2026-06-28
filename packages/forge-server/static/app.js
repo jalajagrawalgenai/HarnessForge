@@ -170,108 +170,91 @@ function renderFullAnalysis(a, raw, id) {
   var recs = a.recommendations || [];
   var healthPct = Math.round((hs.overall||0) * 100);
   var healthColor = healthPct > 80 ? 'var(--accent-green)' : healthPct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
-
-  // ── Header ──
-  document.getElementById('ana-header').innerHTML =
-    '<div class="card" style="border-left:4px solid ' + healthColor + '">' +
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">' +
-    '<div><h2 style="margin:0">' + (a.task||'Untitled').substring(0,60) + '</h2>' +
-    '<p style="margin:4px 0;color:var(--text-secondary)">' + a.agent_type + ' · ' + (a.model||'unknown model') + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + '</p>' +
-    '<p style="margin:4px 0;color:var(--text-secondary);font-size:12px">Session: <code>' + id + '</code></p></div>' +
-    '<div style="text-align:right"><div style="font-size:36px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Health</div></div>' +
-    '</div>' +
-    '<div style="margin-top:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;font-size:13px;line-height:1.6">' +
-    '<strong>Verdict:</strong> ' + (a.health_verdict||'N/A') + '<br>' +
-    '<strong>Stop:</strong> ' + (a.stop_analysis||'N/A') + '</div></div>';
-
-  // ── COST BAR ──
   var cost = tk.estimated_cost_usd || 0;
 
-  // ── Event timeline with costs ──
-  var eventRows = buildEventTimeline(raw);
-
-  // ── Tool breakdown ──
-  var toolRows = (tl.breakdown||[]).map(function(t) {
-    return '<tr><td><strong>' + t.tool + '</strong></td><td>' + t.calls + '</td><td>' + (t.errors > 0 ? '<span style="color:var(--accent-red)">' + t.errors + '</span>' : '0') + '</td><td>' + (t.error_rate_pct||0).toFixed(1) + '%</td><td>' + (t.pct_of_total||0).toFixed(1) + '%</td></tr>';
-  }).join('');
-
-  // ── Health gauges ──
-  var dims = hs.dimensions || {};
-  var gaugeHtml = [
-    ['Token Efficiency', dims.token_efficiency||1, 'Cache & reuse rate'],
-    ['Latency', dims.latency||1, 'Response speed'],
-    ['Cost', dims.cost||1, 'Cost / turn'],
-    ['Accuracy', dims.accuracy||1, 'Output quality'],
-    ['Security', dims.security||1, 'Leaks & injection'],
-    ['Reliability', dims.reliability||1, 'Error resilience'],
-    ['Context', dims.context_quality||1, 'Pressure health'],
-    ['Orchestration', dims.orchestration||1, 'Multi-agent coord'],
-    ['Compliance', dims.compliance||1, 'Rules alignment']
-  ].map(function(g) {
-    var pct = Math.round(g[1] * 100);
-    var gColor = g[1] > 0.8 ? 'gauge-green' : g[1] > 0.5 ? 'gauge-yellow' : 'gauge-red';
-    return '<div style="margin:4px 0"><div style="display:flex;justify-content:space-between;font-size:11px"><span>' + g[0] + '</span><span style="color:' + gColor + '">' + pct + '%</span></div><div class="gauge-bar" style="height:4px"><div class="gauge-fill ' + gColor + '" style="width:' + pct + '%"></div></div></div>';
-  }).join('');
-
-  var recsHtml = recs.length > 0 ? recs.map(function(r) { return '<div style="padding:6px 0;font-size:13px;border-bottom:1px solid var(--border)">💡 ' + r + '</div>'; }).join('') : '<div style="font-size:13px;color:var(--accent-green)">✅ No issues — agent running optimally</div>';
-
-  // Observation details grouped by dimension (human-readable)
-  var obsDetails = a.observation_details || [];
-  var dimNames = {token:'Token Efficiency',latency:'Latency',cost:'Cost',accuracy:'Accuracy',security:'Security',reliability:'Reliability',context_quality:'Context Quality',orch:'Orchestration',comm:'Communication',compliance:'Compliance',memory:'Memory',diversity:'Diversity'};
-  var obsHtml = obsDetails.length > 0 ? obsDetails.map(function(g) {
-    return '<div style="margin:6px 0;padding:8px;background:var(--bg-secondary);border-radius:6px;border-left:3px solid var(--accent-green)">' +
-      '<strong style="font-size:13px;color:var(--accent-green)">' + (dimNames[g.dimension]||g.dimension) + '</strong>' +
-      ' <span style="font-size:11px;color:var(--text-secondary)">· ' + (g.count||0) + ' readings</span>' +
-      '<p style="margin:4px 0;font-size:12px;color:var(--text-primary)">' + (g.description||'No data') + '</p>' +
+  // ── Event log ──
+  var eventLog = a.event_log || [];
+  var timelineHtml = eventLog.length > 0 ? eventLog.map(function(ev) {
+    var time = (ev.time||'').substring(11,19) || '';
+    var color = ev.type === 'error' ? 'var(--accent-red)' : ev.type === 'tool_end' && ev.status === 'FAILED' ? 'var(--accent-red)' : ev.type === 'context' ? 'var(--accent-yellow)' : ev.type === 'start' ? 'var(--accent-green)' : 'var(--text-secondary)';
+    return '<div style="padding:3px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;font-size:11px;font-family:monospace">' +
+      '<span style="color:var(--text-secondary);min-width:50px">' + time + '</span>' +
+      '<span>' + ev.icon + '</span>' +
+      '<span style="color:' + color + '">' + (ev.detail||'').substring(0,120) + '</span>' +
+      (ev.tokens > 0 ? '<span style="color:var(--accent-blue);margin-left:auto">' + ev.tokens + ' tok</span>' : '') +
       '</div>';
-  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No observation data yet — more events needed</p>';
+  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No events captured yet</p>';
 
-  // Detection details
-  var detDetails = a.detection_details || [];
-  var detHtml = detDetails.length > 0 ? detDetails.map(function(d) {
-    return '<div style="margin:4px 0;padding:8px;background:var(--bg-secondary);border-radius:4px;border-left:3px solid var(--accent-red)"><strong>' + (d.category||'issue') + '</strong> <span style="font-size:11px">' + (d.severity||'') + ' conf:' + ((d.confidence||0)*100).toFixed(0) + '%</span><p style="font-size:11px;color:var(--text-secondary)">' + (d.description||'') + '</p></div>';
-  }).join('') : '<p style="color:var(--accent-green);font-size:12px">✅ No issues detected</p>';
+  // ── Tool usage ──
+  var toolRows = (tl.breakdown||[]).map(function(t) {
+    return '<tr><td><strong>' + t.tool + '</strong></td><td>' + t.calls + '</td><td>' + (t.errors > 0 ? '<span style="color:var(--accent-red)">' + t.errors + '</span>' : '0') + '</td><td>' + (t.pct_of_total||0).toFixed(0) + '%</td></tr>';
+  }).join('');
 
-  // Intervention details
-  var intDetails = a.intervention_details || [];
-  var intHtml = intDetails.length > 0 ? intDetails.map(function(i) {
-    return '<div style="margin:4px 0;padding:6px;background:var(--bg-secondary);border-radius:4px;border-left:3px solid var(--accent-blue)"><strong style="font-size:12px">🔧 ' + (i.strategy||'intervention') + '</strong><p style="font-size:11px;color:var(--text-secondary)">' + JSON.stringify(i).substring(0,100) + '</p></div>';
-  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">No interventions applied</p>';
+  // ── Meaningful observations only (skip 100% defaults) ──
+  var obsDetails = a.observation_details || [];
+  var meaningfulObs = obsDetails.filter(function(g) {
+    var d = g.description || '';
+    // Skip pure default observations
+    if (d.indexOf('0 operations, 0.0%') >= 0) return false;
+    if (d.indexOf('0 unique files tracked, 0%') >= 0) return false;
+    if (d.indexOf('0 calls') >= 0) return false;
+    if (d.indexOf('0 lint errors, 100%') >= 0) return false;
+    if (d.indexOf('0 policy violations') >= 0) return false;
+    if (d.indexOf('0 agents, 0 forks') >= 0) return false;
+    if (d.indexOf('0 agent messages') >= 0) return false;
+    return true;
+  });
+  var dimNames = {token:'Token',latency:'Latency',cost:'Cost',accuracy:'Accuracy',security:'Security',reliability:'Reliability',context_quality:'Context',orch:'Orchestration',comm:'Communication',compliance:'Compliance',memory:'Memory',diversity:'Diversity'};
+  var obsHtml = meaningfulObs.length > 0 ? meaningfulObs.map(function(g) {
+    return '<div style="padding:6px 8px;border-bottom:1px solid var(--border)"><span style="color:var(--accent-green)">●</span> <strong>' + (dimNames[g.dimension]||g.dimension) + '</strong>: ' + (g.description||'') + '</div>';
+  }).join('') : '<p style="color:var(--text-secondary);font-size:12px">Waiting for more events to build observation data...</p>';
+
+  var recsHtml = recs.length > 0 ? recs.map(function(r) { return '<div style="padding:6px 0;border-bottom:1px solid var(--border)">💡 ' + r + '</div>'; }).join('') : '<p style="color:var(--text-secondary)">No recommendations yet — run more agent events</p>';
+
+  document.getElementById('ana-header').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:16px">' +
+    '<div><h2 style="margin:0">' + (a.task||'Untitled').substring(0,60) + '</h2>' +
+    '<p style="margin:4px 0;color:var(--text-secondary)">' + a.agent_type + ' · ' + a.status + ' · ' + formatDuration(a.duration_secs||0) + ' · session: <code>' + id.substring(0,12) + '</code></p>' +
+    '<p style="margin:4px 0;font-size:13px">' + (a.stop_analysis||'') + '</p></div>' +
+    '<div style="text-align:right;min-width:120px"><div style="font-size:42px;font-weight:700;color:' + healthColor + '">' + healthPct + '%</div><div style="font-size:12px;color:var(--text-secondary)">Health</div></div></div>';
 
   document.getElementById('ana-body').innerHTML =
-    // ── COST ──
-    '<div class="card"><h3>💰 Cost: <span style="color:var(--accent-green)">$' + cost.toFixed(4) + '</span></h3>' +
-    '<div class="stats-grid"><div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Tokens (' + (tk.model_family||'?') + ')</div></div>' +
+    // ── WHAT HAPPENED: Event Timeline ──
+    '<div class="card"><h3>📋 What Happened</h3>' +
+    '<div style="max-height:400px;overflow-y:auto">' + timelineHtml + '</div></div>' +
+
+    // ── COST & TOKENS ──
+    '<div class="card"><h3>💰 Cost & Tokens</h3>' +
+    '<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">' +
+    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green);font-size:22px">$' + cost.toFixed(4) + '</div><div class="stat-label">Est. Cost</div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.total_tokens||0).toLocaleString() + '</div><div class="stat-label">Total Tokens</div></div>' +
     '<div class="stat-card"><div class="stat-value">' + (tk.cache_hit_pct||0).toFixed(0) + '%</div><div class="stat-label">Cache Hit</div></div>' +
-    '<div class="stat-card"><div class="stat-value">$' + (tk.gross_cost_usd||0).toFixed(4) + '</div><div class="stat-label">Gross</div></div>' +
-    '<div class="stat-card"><div class="stat-value" style="color:var(--accent-green)">-$' + (tk.cache_savings_usd||0).toFixed(4) + '</div><div class="stat-label">Cache Savings</div></div></div></div>' +
+    '<div class="stat-card"><div class="stat-value">' + (tk.model_family||'?') + '</div><div class="stat-label">Model</div></div>' +
+    '</div>' +
+    '<p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Input: ' + (tk.input_tokens||0).toLocaleString() + ' · Output: ' + (tk.output_tokens||0).toLocaleString() + ' · Cache read: ' + (tk.cache_read_tokens||0).toLocaleString() + ' · Gross: $' + (tk.gross_cost_usd||0).toFixed(4) + ' · Saved: $' + (tk.cache_savings_usd||0).toFixed(4) + '</p></div>' +
 
-    // ── LAYER 1: OBSERVE with details ──
-    '<div class="card" style="border-left:4px solid var(--accent-green)"><h3>🔍 OBSERVE — ' + (sm.observations||0) + ' readings across ' + obsDetails.length + ' dimensions</h3>' +
-    '<div style="max-height:400px;overflow-y:auto">' + obsHtml + '</div></div>' +
+    // ── TOOLS USED ──
+    '<div class="card"><h3>🛠️ Tools Used</h3>' +
+    (toolRows ? '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>%</th></tr></thead><tbody>' + toolRows + '</tbody></table>' : '<p style="color:var(--text-secondary)">No tools called</p>') + '</div>' +
 
-    // ── LAYER 2: DETECT with details ──
-    '<div class="card" style="border-left:4px solid ' + (sm.detections > 0 ? 'var(--accent-red)' : 'var(--accent-green)') + '"><h3>⚠ DETECT — ' + (sm.detections||0) + ' issues found</h3>' + detHtml + '</div>' +
+    // ── OBSERVATIONS (meaningful only) ──
+    '<div class="card"><h3>🔍 What Was Observed</h3>' + obsHtml + '</div>' +
 
-    // ── LAYER 3: ACTION with details ──
-    '<div class="card" style="border-left:4px solid var(--accent-blue)"><h3>🔧 ACTION — ' + (sm.interventions||0) + ' interventions</h3>' + intHtml + '</div>' +
+    // ── ISSUES FOUND ──
+    '<div class="card"><h3>⚠ Issues Found</h3>' +
+    (sm.detections > 0 ? '<p style="color:var(--accent-yellow)">' + sm.detections + ' issue(s) detected. See details above.</p>' : '<p style="color:var(--accent-green)">✅ No issues detected</p>') +
+    '<p style="font-size:12px;color:var(--text-secondary)">Context pressure: avg ' + (cx.avg_pressure_pct||0).toFixed(0) + '% / max ' + (cx.max_pressure_pct||0).toFixed(0) + '% · ' + (cx.compaction_events||0) + ' compactions</p></div>' +
 
-    // ── HEALTH GAUGES ──
-    '<div class="card"><h3>📊 Health Scores</h3>' + gaugeHtml + '</div>' +
+    // ── INTERVENTIONS ──
+    '<div class="card"><h3>🔧 Interventions</h3>' +
+    (sm.interventions > 0 ? '<p>' + sm.interventions + ' intervention(s) applied</p>' : '<p style="color:var(--text-secondary)">No interventions needed</p>') + '</div>' +
 
-    // ── TOOL USAGE ──
-    '<div class="card"><h3>🛠️ Tools (' + (tl.total_calls||0) + ' calls, ' + (tl.unique_tools||0) + ' unique)</h3>' +
-    '<table><thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Rate</th><th>%</th></tr></thead><tbody>' + (toolRows||'<tr><td colspan="5">-</td></tr>') + '</tbody></table></div>' +
+    // ── RECOMMENDATIONS ──
+    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 What To Improve</h3>' + recsHtml + '</div>' +
 
-    // ── EVENT TIMELINE ──
-    '<div class="card"><h3>📋 Events (' + (sm.total_events||0) + ')</h3>' +
-    '<div style="max-height:250px;overflow-y:auto;font-family:monospace;font-size:11px">' + (eventRows||'<p style="color:var(--text-secondary)">No events</p>') + '</div></div>' +
-
-    // ── CONTEXT + META ──
-    '<div class="card"><h3>📐 Context: ' + (cx.status||'?') + '</h3><p style="font-size:13px">Avg ' + (cx.avg_pressure_pct||0).toFixed(0) + '% | Max ' + (cx.max_pressure_pct||0).toFixed(0) + '% | ' + (cx.compaction_events||0) + ' compactions</p></div>' +
-    '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 Recommendations</h3>' + recsHtml + '</div>' +
-
-    '<div class="flex-row mb" style="margin-top:16px"><button onclick="showAnalysis(\'' + id + '\')">🔄 Refresh</button><button onclick="showPage(\'sessions\')">← Back</button></div>';
+    '<div class="flex-row" style="margin-top:16px;gap:8px">' +
+    '<button onclick="showAnalysis(\'' + id + '\')">🔄 Refresh</button>' +
+    '<button onclick="showPage(\'sessions\')">← Back</button></div>';
 }
 
 // Build event timeline from raw session data

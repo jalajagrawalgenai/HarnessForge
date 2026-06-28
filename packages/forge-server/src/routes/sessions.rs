@@ -327,8 +327,164 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
         "detection_details": s.detections.clone(),
         "intervention_details": s.interventions.clone(),
 
+        // Build event log from raw events
+        "event_log": build_event_log(&s.events),
+
         "recommendations": recommendations,
     }))
+}
+
+/// Build a human-readable event log from raw AgentEvents.
+fn build_event_log(events: &[forge_sdk::events::AgentEvent]) -> Vec<Value> {
+    use forge_sdk::events::AgentEvent;
+    events.iter().filter_map(|e| {
+        match e {
+            AgentEvent::Started { task, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "start",
+                "icon": "▶",
+                "detail": task,
+            })),
+            AgentEvent::Completed { summary, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "complete",
+                "icon": "✓",
+                "detail": summary,
+            })),
+            AgentEvent::Failed { error, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "error",
+                "icon": "✗",
+                "detail": error,
+            })),
+            AgentEvent::ToolCallStart { tool, args, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "tool_start",
+                "icon": "→",
+                "tool": tool,
+                "detail": format_tool_detail(tool, args),
+            })),
+            AgentEvent::ToolCallEnd { tool, result, timestamp, .. } => {
+                let icon = if result.is_error { "✗" } else { "←" };
+                let status = if result.is_error { "FAILED" } else { "ok" };
+                Some(json!({
+                    "time": timestamp.to_rfc3339(),
+                    "type": "tool_end",
+                    "icon": icon,
+                    "tool": tool,
+                    "status": status,
+                    "tokens": result.token_count,
+                    "detail": if result.content.len() > 150 { format!("{}...", &result.content[..150]) } else { result.content.clone() },
+                }))
+            }
+            AgentEvent::MessageSent { from, content, timestamp, .. } => {
+                let text = match content {
+                    forge_sdk::events::MessageContent::Text(t) => t.clone(),
+                    _ => String::new(),
+                };
+                if text.is_empty() { return None; }
+                Some(json!({
+                    "time": timestamp.to_rfc3339(),
+                    "type": "message",
+                    "icon": "💬",
+                    "from": from,
+                    "detail": if text.len() > 200 { format!("{}...", &text[..200]) } else { text },
+                }))
+            }
+            AgentEvent::ContextPressure { current_ratio, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "context",
+                "icon": "📐",
+                "detail": format!("Context pressure: {:.0}%", current_ratio * 100.0),
+            })),
+            AgentEvent::Forked { child_id, task, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "fork",
+                "icon": "⑂",
+                "detail": format!("Subagent {}: {}", child_id, task),
+            })),
+            AgentEvent::TokenUsage { input, output, cache_read, model, timestamp, .. } => Some(json!({
+                "time": timestamp.to_rfc3339(),
+                "type": "token",
+                "icon": "📊",
+                "detail": format!("Tokens: {} in / {} out (cache: {}). Model: {}", input, output, cache_read, model),
+            })),
+            AgentEvent::OutputDelta { text, timestamp, .. } => {
+                if text.is_empty() || text.starts_with('[') { return None; }
+                Some(json!({
+                    "time": timestamp.to_rfc3339(),
+                    "type": "output",
+                    "icon": "→",
+                    "detail": if text.len() > 150 { format!("{}...", &text[..150]) } else { text.clone() },
+                }))
+            }
+            _ => None,
+        }
+    }).collect()
+}
+
+/// Format tool arguments into a human-readable detail line.
+fn format_tool_detail(tool: &str, args: &Value) -> String {
+    match tool {
+        "Write" | "Edit" => {
+            let path = args
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            format!("{} → {}", tool, path)
+        }
+        "Read" => {
+            let path = args
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            format!("Read {}", path)
+        }
+        "Bash" | "PowerShell" => {
+            let cmd = args.get("command").and_then(|v| v.as_str()).unwrap_or("?");
+            format!(
+                "$ {}",
+                if cmd.len() > 80 {
+                    format!("{}...", &cmd[..80])
+                } else {
+                    cmd.to_string()
+                }
+            )
+        }
+        "Grep" => {
+            let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("grep: {}", pattern)
+        }
+        "Glob" => {
+            let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
+            format!("glob: {}", pattern)
+        }
+        "WebFetch" | "WebSearch" => {
+            let url = args
+                .get("url")
+                .or(args.get("query"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            format!(
+                "{}: {}",
+                tool,
+                if url.len() > 60 {
+                    format!("{}...", &url[..60])
+                } else {
+                    url.to_string()
+                }
+            )
+        }
+        _ => format!(
+            "{}: {}",
+            tool,
+            serde_json::to_string(args)
+                .unwrap_or_default()
+                .chars()
+                .take(60)
+                .collect::<String>()
+        ),
+    }
 }
 
 use chrono::Utc;
