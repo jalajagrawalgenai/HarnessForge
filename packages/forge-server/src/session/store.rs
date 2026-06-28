@@ -144,7 +144,10 @@ pub async fn save_sessions(store: &SharedSessionStore) {
             "interventions_count": s.interventions.len(),
             "health_score": s.health_score,
         });
-        let _ = std::fs::write(&path, serde_json::to_string_pretty(&data).unwrap_or_default());
+        let _ = std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&data).unwrap_or_default(),
+        );
     }
 }
 
@@ -181,7 +184,8 @@ pub async fn load_sessions(store: &SharedSessionStore) -> u64 {
                     session.subagent_count = data["subagent_count"].as_u64().unwrap_or(0);
                     session.user_prompt_count = data["user_prompt_count"].as_u64().unwrap_or(0);
                     if let Some(hs) = &data["health_score"].as_object() {
-                        session.health_score = serde_json::from_value(data["health_score"].clone()).ok();
+                        session.health_score =
+                            serde_json::from_value(data["health_score"].clone()).ok();
                     }
                     // Restore status
                     if let Some(status_str) = data["status"].as_str() {

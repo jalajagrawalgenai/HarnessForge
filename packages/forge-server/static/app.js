@@ -242,12 +242,23 @@ function renderFullAnalysis(a, raw, id) {
 
     // ── ISSUES FOUND ──
     '<div class="card"><h3>⚠ Issues Found</h3>' +
-    (sm.detections > 0 ? '<p style="color:var(--accent-yellow)">' + sm.detections + ' issue(s) detected. See details above.</p>' : '<p style="color:var(--accent-green)">✅ No issues detected</p>') +
-    '<p style="font-size:12px;color:var(--text-secondary)">Context pressure: avg ' + (cx.avg_pressure_pct||0).toFixed(0) + '% / max ' + (cx.max_pressure_pct||0).toFixed(0) + '% · ' + (cx.compaction_events||0) + ' compactions</p></div>' +
+    (detDetails.length > 0 ? detDetails.map(function(d) {
+      var sevColor = (d.severity||'').indexOf('Critical') >= 0 ? 'var(--accent-red)' : (d.severity||'').indexOf('Warning') >= 0 ? 'var(--accent-yellow)' : 'var(--accent-blue)';
+      return '<div style="margin:8px 0;padding:10px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid ' + sevColor + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<strong>' + (d.category||'issue') + '</strong>' +
+        '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + sevColor + ';color:#000">' + (d.severity||'?') + ' · ' + ((d.confidence||0)*100).toFixed(0) + '%</span>' +
+        '</div><p style="margin:6px 0 0 0;font-size:12px;color:var(--text-secondary)">' + (d.description||'') + '</p></div>';
+    }).join('') : '<p style="color:var(--accent-green)">✅ No issues detected</p>') +
+    '<p style="font-size:12px;color:var(--text-secondary);margin-top:8px">Context: avg ' + (cx.avg_pressure_pct||0).toFixed(0) + '% / max ' + (cx.max_pressure_pct||0).toFixed(0) + '% · ' + (cx.compaction_events||0) + ' compactions</p></div>' +
 
     // ── INTERVENTIONS ──
     '<div class="card"><h3>🔧 Interventions</h3>' +
-    (sm.interventions > 0 ? '<p>' + sm.interventions + ' intervention(s) applied</p>' : '<p style="color:var(--text-secondary)">No interventions needed</p>') + '</div>' +
+    (intDetails.length > 0 ? intDetails.map(function(i) {
+      return '<div style="margin:6px 0;padding:8px;background:var(--bg-secondary);border-radius:6px;border-left:4px solid var(--accent-blue)">' +
+        '<strong style="font-size:13px">' + (i.strategy||'intervention') + '</strong>' +
+        '<p style="margin:4px 0 0 0;font-size:12px;color:var(--text-secondary)">' + (i.action||'') + '</p></div>';
+    }).join('') : '<p style="color:var(--text-secondary)">No interventions needed</p>') + '</div>' +
 
     // ── RECOMMENDATIONS ──
     '<div class="card" style="border-left:4px solid var(--accent-purple)"><h3>🧠 What To Improve</h3>' + recsHtml + '</div>' +

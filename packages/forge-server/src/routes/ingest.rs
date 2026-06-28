@@ -43,6 +43,274 @@ fn build_registry_for_preset(preset_name: &str) -> forge_harness::plugin_registr
     forge_harness::factory::build_registry_from_preset(&preset)
 }
 
+/// Run a single pipeline cycle: observe → detect → strategize → health.
+/// Shared by ingest_event and ingest_batch.
+async fn run_pipeline_cycle(
+    state: &Arc<AppState>,
+    session_id: &str,
+    agent_id: &str,
+    hook_name: &str,
+    registry: &forge_harness::plugin_registry::PluginRegistry,
+    event: &AgentEvent,
+    payload: &Value,
+    starts_session: bool,
+    stops_session: bool,
+) -> Value {
+    let mut new_observations: Vec<Value> = Vec::new();
+    let mut new_detections: Vec<Value> = Vec::new();
+    let mut new_strategies: Vec<Value> = Vec::new();
+    let mut new_interventions: Vec<Value> = Vec::new();
+    let mut health_update: Option<Value> = None;
+
+    // 1. OBSERVE
+    for observer in registry.observers() {
+        if let Some(obs) = observer.observe(event).await {
+            new_observations.push(obs.clone());
+        }
+    }
+
+    // 2. STORE + BROADCAST
+    {
+        let mut sessions = state.store.write().await;
+        if let Some(s) = sessions.get_mut(session_id) {
+            let _ = s.event_broadcaster.send(event.clone());
+            s.events.push(event.clone());
+            if s.events.len() > 1000 {
+                s.events.remove(0);
+            }
+            s.event_count += 1;
+            for obs in &new_observations {
+                s.observations.push(obs.clone());
+                if s.observations.len() > 200 {
+                    s.observations.remove(0);
+                }
+            }
+        }
+    }
+
+    // 3. DETECT + STRATEGIZE
+    let should_detect = {
+        let sessions = state.store.read().await;
+        sessions
+            .get(session_id)
+            .map(|s| {
+                s.event_count % 3 == 0
+                    || hook_name == "PostToolUse"
+                    || hook_name == "PostToolUseFailure"
+            })
+            .unwrap_or(false)
+    };
+
+    if should_detect {
+        let observations_snapshot = {
+            let sessions = state.store.read().await;
+            sessions
+                .get(session_id)
+                .map(|s| s.observations.clone())
+                .unwrap_or_default()
+        };
+        for detector in registry.detectors() {
+            let found = detector.detect(agent_id, &observations_snapshot).await;
+            for issue in &found {
+                new_detections.push(json!({
+                    "category": issue.category_name(),
+                    "severity": format!("{:?}", issue.severity),
+                    "confidence": issue.confidence,
+                    "description": issue.description,
+                }));
+                for strategy in registry.strategies() {
+                    if let Some(result) = strategy.evaluate(issue).await {
+                        new_strategies.push(json!({
+                            "strategy": strategy.name(),
+                            "detection": issue.category_name(),
+                            "intervention": format!("{:?}", result.intervention),
+                        }));
+                        new_interventions.push(json!({
+                            "strategy": strategy.name(),
+                            "action": format!("{:?}", result.intervention),
+                        }));
+                        break;
+                    }
+                }
+            }
+        }
+        // Direct event-based detection
+        {
+            let sessions = state.store.read().await;
+            if let Some(s) = sessions.get(session_id) {
+                let (dd, ds, di) = detect_from_events(s, registry);
+                new_detections.extend(dd);
+                new_strategies.extend(ds);
+                new_interventions.extend(di);
+            }
+        }
+        // Store
+        {
+            let mut sessions = state.store.write().await;
+            if let Some(s) = sessions.get_mut(session_id) {
+                for d in &new_detections {
+                    s.detections.push(d.clone());
+                }
+                for st in &new_strategies {
+                    s.strategy_results.push(st.clone());
+                }
+                for iv in &new_interventions {
+                    s.interventions.push(iv.clone());
+                }
+                if s.detections.len() > 100 {
+                    s.detections.remove(0);
+                }
+                if s.strategy_results.len() > 100 {
+                    s.strategy_results.remove(0);
+                }
+                if s.interventions.len() > 100 {
+                    s.interventions.remove(0);
+                }
+            }
+        }
+    }
+
+    // 4. HEALTH
+    {
+        let sessions = state.store.read().await;
+        if let Some(s) = sessions.get(session_id) {
+            let dims = compute_health_dimensions(&s.observations);
+            let overall = compute_overall_health(&dims);
+            health_update = Some(json!({
+                "overall": overall,
+                "trend": "stable",
+                "dimensions": {
+                    "token_efficiency": dims.token_efficiency,
+                    "latency": dims.latency, "cost": dims.cost,
+                    "accuracy": dims.accuracy, "orchestration": dims.orchestration,
+                    "security": dims.security, "reliability": dims.reliability,
+                    "context_quality": dims.context_quality, "compliance": dims.compliance,
+                },
+            }));
+        }
+    }
+    if let Some(ref hu) = health_update {
+        let mut sessions = state.store.write().await;
+        if let Some(s) = sessions.get_mut(session_id) {
+            s.health_score = Some(forge_sdk::types::health::HealthScore {
+                agent_id: agent_id.to_string(),
+                overall: hu["overall"].as_f64().unwrap_or(1.0),
+                dimensions: forge_sdk::types::health::HealthDimensions {
+                    token_efficiency: hu["dimensions"]["token_efficiency"].as_f64().unwrap_or(1.0),
+                    latency: hu["dimensions"]["latency"].as_f64().unwrap_or(1.0),
+                    cost: hu["dimensions"]["cost"].as_f64().unwrap_or(1.0),
+                    accuracy: hu["dimensions"]["accuracy"].as_f64().unwrap_or(1.0),
+                    orchestration: hu["dimensions"]["orchestration"].as_f64().unwrap_or(1.0),
+                    security: hu["dimensions"]["security"].as_f64().unwrap_or(1.0),
+                    reliability: hu["dimensions"]["reliability"].as_f64().unwrap_or(1.0),
+                    context_quality: hu["dimensions"]["context_quality"].as_f64().unwrap_or(1.0),
+                    compliance: hu["dimensions"]["compliance"].as_f64().unwrap_or(1.0),
+                    communication: None,
+                    memory: None,
+                    diversity: None,
+                },
+                trend: forge_sdk::types::health::HealthTrend::Stable,
+            });
+        }
+    }
+
+    // 5. SESSION STATUS + CUMULATIVE TRACKING
+    {
+        let mut sessions = state.store.write().await;
+        if let Some(s) = sessions.get_mut(session_id) {
+            if starts_session && s.status == SessionStatus::Pending {
+                s.status = SessionStatus::Running;
+            }
+            if stops_session {
+                s.status = SessionStatus::Completed;
+                s.completed_at = Some(Utc::now());
+            }
+            if hook_name == "StopFailure" {
+                s.status = SessionStatus::Failed;
+                s.completed_at = Some(Utc::now());
+            }
+            if let Some(p) = payload.get("prompt").and_then(|v| v.as_str()) {
+                if s.task == "(live agent session)" && !p.is_empty() {
+                    s.task = p.to_string();
+                }
+            }
+            // Cumulative tracking
+            match hook_name {
+                "UserPromptSubmit" => {
+                    s.user_prompt_count += 1;
+                }
+                "PostToolUse" => {
+                    let tool = payload
+                        .get("tool_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    *s.tool_counts.entry(tool.to_string()).or_insert(0) += 1;
+                    if payload
+                        .get("is_error")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                    {
+                        *s.tool_errors.entry(tool.to_string()).or_insert(0) += 1;
+                    }
+                    if let Some(ms) = payload.get("duration_ms").and_then(|v| v.as_u64()) {
+                        s.total_tool_ms += ms;
+                    }
+                    if let Some(u) = payload.get("usage") {
+                        if let Some(i) = u.get("input_tokens").and_then(|v| v.as_u64()) {
+                            s.total_input_tokens += i;
+                        }
+                        if let Some(o) = u.get("output_tokens").and_then(|v| v.as_u64()) {
+                            s.total_output_tokens += o;
+                        }
+                    }
+                }
+                "PostToolUseFailure" => {
+                    let tool = payload
+                        .get("tool_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    *s.tool_errors.entry(tool.to_string()).or_insert(0) += 1;
+                    *s.tool_counts.entry(tool.to_string()).or_insert(0) += 1;
+                }
+                "PreCompact" => {
+                    if let Some(r) = payload.get("context_ratio").and_then(|v| v.as_f64()) {
+                        s.context_pressure_history.push(r);
+                    }
+                }
+                "SubagentStart" => {
+                    s.subagent_count += 1;
+                }
+                _ => {}
+            }
+            if let AgentEvent::TokenUsage {
+                input,
+                output,
+                cache_read,
+                cache_write,
+                model,
+                ..
+            } = event
+            {
+                s.total_input_tokens += input;
+                s.total_output_tokens += output;
+                s.total_cache_read += cache_read;
+                s.total_cache_write += cache_write;
+                if s.model_name.is_none() && !model.is_empty() && model != "unknown" {
+                    s.model_name = Some(model.clone());
+                }
+            }
+        }
+    }
+
+    json!({
+        "observations": new_observations,
+        "detections": new_detections,
+        "strategies": new_strategies,
+        "interventions": new_interventions,
+        "health": health_update,
+    })
+}
+
 /// POST /api/v1/ingest/event
 ///
 /// Universal event ingestion. Accepts events from any agentic system.
@@ -546,6 +814,7 @@ pub async fn ingest_transcript(
 /// POST /api/v1/ingest/batch
 ///
 /// Batch ingest for Cursor, Antigravity, and other agents without native hooks.
+/// Runs the full harness pipeline (observe → detect → strategize) on each event.
 /// Body: { "agentClass": "cursor", "events": [ { "hookName": "SessionStart", ... } ] }
 pub async fn ingest_batch(
     State(state): State<Arc<AppState>>,
@@ -561,6 +830,7 @@ pub async fn ingest_batch(
         .cloned()
         .unwrap_or_default();
     let mut ingested = 0u64;
+    let mut pipeline_results = Vec::new();
 
     for ev in &events {
         let hook_name = ev
@@ -571,10 +841,7 @@ pub async fn ingest_batch(
             .get("sessionId")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let agent_id = ev
-            .get("agentId")
-            .and_then(|v| v.as_str())
-            .unwrap_or("root");
+        let agent_id = ev.get("agentId").and_then(|v| v.as_str()).unwrap_or("root");
         let tool_name = ev.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
         let payload = ev.get("payload").cloned().unwrap_or(json!({}));
         let flags = ev.get("flags").cloned().unwrap_or(json!({}));
@@ -599,36 +866,60 @@ pub async fn ingest_batch(
                 .unwrap_or("(batch)")
                 .to_string();
             let agent_type = map_agent_class(agent_class);
-            let session = SessionState::new(
-                session_id.to_string(),
-                task,
-                agent_type.clone(),
-                agent_type,
-            );
+            let session =
+                SessionState::new(session_id.to_string(), task, agent_type.clone(), agent_type);
             let mut sessions = state.store.write().await;
             sessions.insert(session_id.to_string(), session);
-            tracing::info!(session_id = %session_id, agent_class = %agent_class, "Batch-created session");
+            tracing::info!(
+                session_id = %session_id,
+                agent_class = %agent_class,
+                "Batch-created session"
+            );
         }
 
-        let agent_event =
-            hook_to_agent_event(hook_name, agent_id, tool_name, &payload, 0);
-        if let Some(event) = agent_event {
-            let mut sessions = state.store.write().await;
-            if let Some(s) = sessions.get_mut(session_id) {
-                s.events.push(event.clone());
-                if s.events.len() > 1000 {
-                    s.events.remove(0);
-                }
-                s.event_count += 1;
-                let _ = s.event_broadcaster.send(event);
-                if starts_session && s.status == SessionStatus::Pending {
-                    s.status = SessionStatus::Running;
-                }
-                if stops_session {
-                    s.status = SessionStatus::Completed;
-                    s.completed_at = Some(Utc::now());
+        // Build registry from session preset
+        let registry = {
+            let sessions = state.store.read().await;
+            let base = sessions
+                .get(session_id)
+                .map(|s| build_registry_for_preset(&s.preset))
+                .unwrap_or_else(|| build_registry_for_preset("solo"));
+            let cfg = state.harness_config.read().await;
+            let mut filtered = forge_harness::plugin_registry::PluginRegistry::new();
+            for obs in base.observers() {
+                if cfg.enabled_observers.contains(&obs.name().to_string()) {
+                    filtered.register_observer(obs.clone());
                 }
             }
+            for det in base.detectors() {
+                if cfg.enabled_detectors.contains(&det.name().to_string()) {
+                    filtered.register_detector(det.clone());
+                }
+            }
+            for strat in base.strategies() {
+                if cfg.enabled_strategies.contains(&strat.name().to_string()) {
+                    filtered.register_strategy(strat.clone());
+                }
+            }
+            filtered
+        };
+
+        // Convert and run pipeline
+        let agent_event = hook_to_agent_event(hook_name, agent_id, tool_name, &payload, 0);
+        if let Some(event) = agent_event {
+            let cycle_result = run_pipeline_cycle(
+                &state,
+                session_id,
+                agent_id,
+                hook_name,
+                &registry,
+                &event,
+                &payload,
+                starts_session,
+                stops_session,
+            )
+            .await;
+            pipeline_results.push(cycle_result);
             ingested += 1;
         }
     }
@@ -638,6 +929,7 @@ pub async fn ingest_batch(
         "agentClass": agent_class,
         "eventsReceived": events.len(),
         "eventsIngested": ingested,
+        "pipeline": pipeline_results,
     }))
 }
 
@@ -820,7 +1112,8 @@ fn detect_from_events(
 
     // ── COST ANOMALY: check if token usage per event is spiking ──
     if s.event_count > 5 {
-        let avg_tokens_per_event = (s.total_input_tokens + s.total_output_tokens) as f64 / s.event_count as f64;
+        let avg_tokens_per_event =
+            (s.total_input_tokens + s.total_output_tokens) as f64 / s.event_count as f64;
         if avg_tokens_per_event > 5000.0 {
             detections.push(json!({
                 "category": "cost_anomaly",
@@ -1037,7 +1330,10 @@ fn hook_to_agent_event(
                 result: forge_sdk::events::ToolResult {
                     content,
                     is_error,
-                    duration_ms: 0,
+                    duration_ms: payload
+                        .get("duration_ms")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
                     token_count,
                 },
                 timestamp: ts,
@@ -1053,7 +1349,10 @@ fn hook_to_agent_event(
                     .unwrap_or("tool failed")
                     .to_string(),
                 is_error: true,
-                duration_ms: 0,
+                duration_ms: payload
+                    .get("duration_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
                 token_count: 0,
             },
             timestamp: ts,
