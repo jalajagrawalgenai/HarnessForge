@@ -328,6 +328,7 @@ pub async fn analysis(State(state): State<Arc<AppState>>, Path(id): Path<String>
         // Raw detection and intervention data for deep inspection
         "detection_details": s.detections.clone(),
         "intervention_details": s.interventions.clone(),
+        "strategy_details": s.strategy_results.clone(),
 
         // Build event log from raw events
         "event_log": build_event_log(&s.events),

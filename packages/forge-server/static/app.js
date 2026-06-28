@@ -172,6 +172,10 @@ function renderFullAnalysis(a, raw, id) {
   var healthColor = healthPct > 80 ? 'var(--accent-green)' : healthPct > 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
   var cost = tk.estimated_cost_usd || 0;
 
+  // ── Detection and intervention detail data ──
+  var detDetails = a.detection_details || [];
+  var intDetails = a.intervention_details || [];
+
   // ── Event log ──
   var eventLog = a.event_log || [];
   var timelineHtml = eventLog.length > 0 ? eventLog.map(function(ev) {

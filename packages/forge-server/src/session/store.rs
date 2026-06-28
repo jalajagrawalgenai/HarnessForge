@@ -143,6 +143,8 @@ pub async fn save_sessions(store: &SharedSessionStore) {
             "detections_count": s.detections.len(),
             "interventions_count": s.interventions.len(),
             "health_score": s.health_score,
+            // Persist last 200 raw events for replay
+            "events": s.events.iter().rev().take(200).cloned().collect::<Vec<_>>(),
         });
         let _ = std::fs::write(
             &path,
@@ -181,6 +183,14 @@ pub async fn load_sessions(store: &SharedSessionStore) -> u64 {
                     session.total_cache_write = data["total_cache_write"].as_u64().unwrap_or(0);
                     session.model_name = data["model_name"].as_str().map(String::from);
                     session.stop_reason = data["stop_reason"].as_str().map(String::from);
+                    if let Some(events) = data["events"].as_array() {
+                        for ev in events {
+                            if let Ok(ae) = serde_json::from_value(ev.clone()) {
+                                session.events.push(ae);
+                            }
+                        }
+                        session.event_count = session.events.len() as u64;
+                    }
                     session.subagent_count = data["subagent_count"].as_u64().unwrap_or(0);
                     session.user_prompt_count = data["user_prompt_count"].as_u64().unwrap_or(0);
                     if let Some(hs) = &data["health_score"].as_object() {

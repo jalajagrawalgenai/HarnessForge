@@ -19,6 +19,7 @@ use axum::Json;
 use chrono::Utc;
 use forge_sdk::events::AgentEvent;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Build a PluginRegistry from a preset string.
@@ -930,6 +931,62 @@ pub async fn ingest_batch(
         "eventsReceived": events.len(),
         "eventsIngested": ingested,
         "pipeline": pipeline_results,
+    }))
+}
+
+/// GET /api/v1/agents/status
+///
+/// Returns connection status for all supported agent types.
+pub async fn agent_status(State(state): State<Arc<AppState>>) -> Json<Value> {
+    let sessions = state.store.read().await;
+    let mut agents: HashMap<String, Value> = HashMap::new();
+
+    for s in sessions.values() {
+        let entry = agents.entry(s.agent_type.clone()).or_insert_with(|| {
+            json!({
+                "agent_type": s.agent_type,
+                "session_count": 0,
+                "active_sessions": 0,
+                "last_seen": null,
+                "status": "not_detected",
+            })
+        });
+        entry["session_count"] = json!(entry["session_count"].as_u64().unwrap_or(0) + 1);
+        if s.status == SessionStatus::Running {
+            entry["active_sessions"] = json!(entry["active_sessions"].as_u64().unwrap_or(0) + 1);
+        }
+        entry["last_seen"] = json!(s.completed_at.unwrap_or(s.created_at).to_rfc3339());
+        entry["status"] = json!("connected");
+    }
+
+    // Add known agent types that haven't been seen
+    for at in &[
+        "claude-code",
+        "cursor",
+        "antigravity",
+        "langgraph",
+        "crewai",
+        "autogen",
+        "aider",
+        "cline",
+        "copilot",
+        "windsurf",
+        "devin",
+    ] {
+        agents.entry(at.to_string()).or_insert_with(|| {
+            json!({
+                "agent_type": at,
+                "session_count": 0,
+                "active_sessions": 0,
+                "last_seen": null,
+                "status": "not_detected",
+            })
+        });
+    }
+
+    Json(json!({
+        "agents": agents.values().collect::<Vec<_>>(),
+        "total_agent_types_detected": agents.values().filter(|v| v["status"] == "connected").count(),
     }))
 }
 
